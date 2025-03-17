@@ -42,35 +42,38 @@ def process_images(dir_path: Path):
     reader = easyocr.Reader(["en", "no"], gpu=True)
     blur_coefficient = 100 * 2 + 1
 
-    for file in dir_path.iterdir():
-        if file.suffix.lower() == ".heic":
-            heif_file = pillow_heif.read_heif(file)
-            image = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data)
-            if image.mode != "RGB":
-                image = image.convert("RGB")
-            image = np.array(image)
-            image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
-        else:
-            image = cv2.imread(file)
+    for root, _, files in os.walk(dir_path):
+        for file in files:
+            file = Path(root) / file
+            if file.suffix.lower() == ".heic":
+                heif_file = pillow_heif.read_heif(file)
+                image = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data)
+                if image.mode != "RGB":
+                    image = image.convert("RGB")
 
-        if image is None:
-            file.unlink()
-            continue
+                image = np.array(image)
+                image = cv2.cvtColor(image, cv2.COLOR_RGB2BGR)
+            else:
+                image = cv2.imread(file)
 
-        results = model(image)
-        blur_items(results[0], items_to_blur, image, blur_coefficient)
+            if image is None:
+                file.unlink()
+                continue
 
-        results_text = reader.readtext(image)
-        blur_text(results_text, image, blur_coefficient)
-        # Overwrite image
-        cv2.imwrite(
-            (dir_path / file.name).with_suffix(".jpg"),
-            image,
-            [cv2.IMWRITE_JPEG_QUALITY, 90],
-        )
+            results = model(image)
+            blur_items(results[0], items_to_blur, image, blur_coefficient)
 
-        if file.suffix != ".jpg":
-            file.unlink()
+            results_text = reader.readtext(image)
+            blur_text(results_text, image, blur_coefficient)
+            # Overwrite image
+            cv2.imwrite(
+                (dir_path / file.name).with_suffix(".jpg"),
+                image,
+                [cv2.IMWRITE_JPEG_QUALITY, 90],
+            )
+
+            if file.suffix != ".jpg":
+                file.unlink()
 
 
 def process_zip_file(uploaded_file_path: Path, processed_id, processed_dir):
