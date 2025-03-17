@@ -61,7 +61,7 @@ async def upload_file(zipFile: UploadFile = File(...)):
 
     except Exception as e:
         print(f"Error processing file: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing file: 500 Internal Server Error")
 
 
 @app.get("/download/{file_id}")
