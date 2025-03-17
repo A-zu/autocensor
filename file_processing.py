@@ -1,3 +1,6 @@
+import os
+import tempfile
+import zipfile
 from pathlib import Path
 
 import cv2
@@ -30,18 +33,17 @@ def blur_text(results, image, blur_coefficient):
         blur(bbox, image, blur_coefficient)
 
 
-def main():
+def process_images(dir_path: Path):
     items_to_blur = [62, 63]  # tv, laptop
-    input_folder = Path().parent / "images" / "input"
-    output_folder = Path().parent / "images" / "both"
-    blur_coefficient = 100 * 2 + 1
-
     model = YOLO("yolo12x.pt")
     reader = easyocr.Reader(["en", "no"], gpu=True)
-    output_folder.mkdir(exist_ok=True)
+    blur_coefficient = 100 * 2 + 1
 
-    files = [x for x in input_folder.iterdir()]
-    for file in files:
+    for file in dir_path.iterdir():
+        if not file.name.endswith(".png"):
+            file.unlink()
+            continue
+
         image = cv2.imread(file)
 
         results = model(image)
@@ -49,8 +51,30 @@ def main():
 
         results_text = reader.readtext(image)
         blur_text(results_text, image, blur_coefficient)
-        cv2.imwrite(output_folder / file.name, image)
+        # Overwrite image
+        cv2.imwrite(dir_path / file.name, image)
 
 
-if __name__ == "__main__":
-    main()
+def process_zip_file(uploaded_file_path: Path, processed_id, processed_dir):
+    original_filename = uploaded_file_path.name.split("_", 1)[
+        1
+    ]  # Remove the UUID prefix
+    processed_filename = f"processed_{processed_id}_{original_filename}"
+    processed_file_path = processed_dir / processed_filename
+
+    with tempfile.TemporaryDirectory() as temp_dir:
+        temp_dir_path = Path(temp_dir)
+
+        # Extract the original zip
+        with zipfile.ZipFile(uploaded_file_path, "r") as zip_ref:
+            zip_ref.extractall(temp_dir_path)
+
+        process_images(temp_dir_path)
+
+        with zipfile.ZipFile(processed_file_path, "w", zipfile.ZIP_DEFLATED) as zipf:
+            for root, _, files in os.walk(temp_dir_path):
+                for file in files:
+                    file_path = Path(root) / file
+                    zipf.write(file_path, arcname=file_path.relative_to(temp_dir_path))
+
+    return processed_file_path

@@ -1,0 +1,97 @@
+from pathlib import Path
+import uuid
+from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse, JSONResponse
+import shutil
+
+from file_processing import process_zip_file
+
+app = FastAPI()
+
+UPLOAD_DIR = Path("uploads")
+PROCESSED_DIR = Path("processed")
+UPLOAD_DIR.mkdir(exist_ok=True)
+PROCESSED_DIR.mkdir(exist_ok=True)
+
+processed_files = {}
+
+
+@app.get("/")
+async def home():
+    return FileResponse("index.html")
+
+
+@app.post("/upload")
+async def upload_file(zipFile: UploadFile = File(...)):
+    """
+    Endpoint to handle ZIP file uploads and processing.
+
+    Args:
+        zipFile: The ZIP file uploaded by the user
+
+    Returns:
+        JSON response with status, message, and processed file ID
+    """
+    if not zipFile.filename.lower().endswith(".zip"):
+        raise HTTPException(status_code=400, detail="Only .zip files are allowed")
+
+    try:
+        upload_id = str(uuid.uuid4())
+        processed_id = str(uuid.uuid4())
+
+        uploaded_file_path = UPLOAD_DIR / f"{upload_id}_{zipFile.filename}"
+        with open(uploaded_file_path, "wb") as buffer:
+            shutil.copyfileobj(zipFile.file, buffer)
+
+        processed_file_path = process_zip_file(
+            uploaded_file_path, processed_id, PROCESSED_DIR
+        )
+
+        # Store the mapping of ID to processed file path
+        processed_files[processed_id] = processed_file_path
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": f"File processed successfully. Click to download.",
+                "processedFileId": processed_id,
+            },
+        )
+
+    except Exception as e:
+        print(f"Error processing file: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Error processing file: {str(e)}")
+
+
+@app.get("/download/{file_id}")
+async def download_processed_file(file_id: str):
+    """
+    Endpoint to download a processed zip file.
+
+    Args:
+        file_id: The unique ID of the processed file
+
+    Returns:
+        The processed zip file as a download
+    """
+    if file_id not in processed_files:
+        raise HTTPException(status_code=404, detail="Processed file not found")
+
+    file_path = processed_files[file_id]
+
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Processed file no longer exists")
+
+    return FileResponse(
+        path=file_path,
+        filename=file_path.name.split("_", 2)[2],  # Remove the "processed_UUID_" prefix
+        media_type="application/zip",
+    )
+
+
+# Run the app with uvicorn
+if __name__ == "__main__":
+    import uvicorn
+
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
