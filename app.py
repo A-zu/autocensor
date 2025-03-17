@@ -1,8 +1,9 @@
-from pathlib import Path
 import uuid
+import shutil
+from pathlib import Path
+
 from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse, JSONResponse
-import shutil
 
 from file_processing import process_zip_file
 
@@ -61,7 +62,9 @@ async def upload_file(zipFile: UploadFile = File(...)):
 
     except Exception as e:
         print(f"Error processing file: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Error processing file: 500 Internal Server Error")
+        raise HTTPException(
+            status_code=500, detail=f"Error processing file: 500 Internal Server Error"
+        )
 
 
 @app.get("/download/{file_id}")
