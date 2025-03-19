@@ -148,6 +148,19 @@
         let selectedFile = null;
         let processedFileId = null;
 
+        if (window.location.pathname.endsWith('/') && window.location.pathname !== '/') {
+            const newUrl = window.location.pathname.slice(0, -1) + window.location.search + window.location.hash;
+            window.history.replaceState(null, '', newUrl);
+        }
+
+        let root = window.location.href;
+        if (window.location.pathname === '/'){
+            root = '';
+        }
+        
+        const uploadEndpoint = `${root}/upload`;
+        const downloadEndpoint = `${root}/download`;
+
         // Handle browse button click
         browseBtn.addEventListener('click', () => {
             fileInput.click();
@@ -267,7 +280,7 @@
                     formData.append('zipFile', selectedFile);
                     
                     // Send the file to the server
-                    const response = await fetch('/upload', {
+                    const response = await fetch(uploadEndpoint, {
                         method: 'POST',
                         body: formData
                     });
@@ -308,7 +321,7 @@
         
         function initiateDownload(fileId) {
             // Use the hidden iframe to trigger download without navigating away
-            downloadFrame.src = `/download/${fileId}`;
+            downloadFrame.src = `${downloadEndpoint}/${fileId}`;
             
             // Show a temporary message
             statusMessage.textContent = 'Download started...';

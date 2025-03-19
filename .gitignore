@@ -9,7 +9,10 @@ wheels/
 # Virtual environments
 .venv
 
-# resources
+# Folders
 images
+datasets
+
+# resources
 *.pt
 *.zip
