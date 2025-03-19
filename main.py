@@ -26,13 +26,14 @@ async def removeProxyPath(request: Request, call_next):
 
 
 @app.get("")
+@app.get("/")
 async def home():
     return FileResponse("static/index.html")
 
 
 @app.exception_handler(404)
 async def exception_404(request, __):
-    root_path = request.scope.get("root_path", "")
+    root_path = request.scope.get("root_path", "") or "/"
     return RedirectResponse(url=f"{root_path}")
 
 
