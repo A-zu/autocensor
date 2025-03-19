@@ -2,8 +2,8 @@ import uuid
 import shutil
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
-from fastapi.responses import FileResponse, JSONResponse
+from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from file_processing import process_zip_file
 
@@ -17,9 +17,23 @@ PROCESSED_DIR.mkdir(exist_ok=True)
 processed_files = {}
 
 
-@app.get("/")
+@app.middleware("http")
+async def removeProxyPath(request: Request, call_next):
+    root_path = request.scope.get("root_path", "")
+    request.scope["path"] = request.url.path.replace(root_path, "", 1)
+    response = await call_next(request)
+    return response
+
+
+@app.get("")
 async def home():
-    return FileResponse("index.html")
+    return FileResponse("static/index.html")
+
+
+@app.exception_handler(404)
+async def exception_404(request, __):
+    root_path = request.scope.get("root_path", "")
+    return RedirectResponse(url=f"{root_path}")
 
 
 @app.post("/upload")
