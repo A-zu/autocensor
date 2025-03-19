@@ -108,6 +108,13 @@ async def download_processed_file(file_id: str):
     )
 
 
+@app.get("/example-zip")
+async def example_zip():
+    return FileResponse(
+        path="static/example.zip", filename="example.zip", media_type="application/zip"
+    )
+
+
 # Run the app with uvicorn
 if __name__ == "__main__":
     import uvicorn

@@ -14,6 +14,7 @@ RUN python -c "from ultralytics import YOLO; YOLO('yolo12x.pt')"
 COPY main.py .
 COPY file_processing.py .
 COPY static/index.html static/index.html
+COPY static/example.zip static/example.zip
 
 RUN python main.py & \
     sleep 10 && \

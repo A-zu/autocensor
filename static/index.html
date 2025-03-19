@@ -65,6 +65,14 @@
       .download-btn:hover {
         background-color: #219653;
       }
+      .example-btn {
+        background-color: #f39c12;
+        color: white;
+        margin-top: 1rem;
+      }
+      .example-btn:hover {
+        background-color: #e67e22;
+      }
       .btn:disabled {
         background-color: #cccccc;
         cursor: not-allowed;
@@ -106,6 +114,16 @@
       }
       #download-frame {
         display: none;
+      }
+      .example-container {
+        text-align: center;
+        margin-top: 2rem;
+        padding-top: 1.5rem;
+        border-top: 1px solid #eee;
+      }
+      .example-text {
+        margin-bottom: 1rem;
+        color: #666;
       }
     </style>
   </head>
@@ -154,21 +172,29 @@
       </div>
     </form>
 
+    <div class="example-container">
+      <p class="example-text">Don't have a ZIP file? Download an example:</p>
+      <button type="button" id="example-btn" class="btn example-btn">
+        Download Example ZIP
+      </button>
+    </div>
+
     <!-- Hidden iframe for downloads -->
     <iframe id="download-frame" name="download-frame"></iframe>
 
     <script>
+      const loader = document.getElementById("loader");
       const dropArea = document.getElementById("drop-area");
-      const fileInput = document.getElementById("file-input");
-      const browseBtn = document.getElementById("browse-btn");
       const fileInfo = document.getElementById("file-info");
       const fileName = document.getElementById("file-name");
-      const errorMessage = document.getElementById("error-message");
       const actionBtn = document.getElementById("action-btn");
+      const browseBtn = document.getElementById("browse-btn");
+      const fileInput = document.getElementById("file-input");
+      const exampleBtn = document.getElementById("example-btn");
       const uploadForm = document.getElementById("upload-form");
-      const loader = document.getElementById("loader");
-      const statusMessage = document.getElementById("status-message");
+      const errorMessage = document.getElementById("error-message");
       const downloadFrame = document.getElementById("download-frame");
+      const statusMessage = document.getElementById("status-message");
 
       let selectedFile = null;
       let processedFileId = null;
@@ -191,6 +217,7 @@
 
       const uploadEndpoint = `${root}/upload`;
       const downloadEndpoint = `${root}/download`;
+      const exampleEndpoint = `${root}/example-zip`;
 
       // Handle browse button click
       browseBtn.addEventListener("click", () => {
@@ -221,6 +248,11 @@
 
       // Handle action button click (upload or download)
       actionBtn.addEventListener("click", handleActionButtonClick);
+
+      // Handle example button click
+      exampleBtn.addEventListener("click", () => {
+        downloadFrame.src = exampleEndpoint;
+      });
 
       function preventDefaults(e) {
         e.preventDefault();
