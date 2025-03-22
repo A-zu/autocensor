@@ -11,36 +11,41 @@ from PIL import Image
 from ultralytics import YOLO
 
 
-def blur(bbox, image, blur_coefficient):
+def blur(bbox, image, blur_function):
     top_left = [bbox[0], bbox[1]]
     bottom_right = [bbox[2], bbox[3]]
     roi = image[top_left[1] : bottom_right[1], top_left[0] : bottom_right[0]]
-    blurred = cv2.GaussianBlur(roi, (blur_coefficient, blur_coefficient), 0)
+    blurred = blur_function(roi)
     image[top_left[1] : bottom_right[1], top_left[0] : bottom_right[0]] = blurred
 
 
-def blur_items(result, items_to_blur, image, blur_coefficient):
+def blur_items(result, items_to_blur, image, blur_function):
     for box in result.boxes:
         if box.cls in items_to_blur:
             bbox = [int(x) for x in box.xyxy[0]]
-            blur(bbox, image, blur_coefficient)
+            blur(bbox, image, blur_function)
 
 
-def blur_text(results, image, blur_coefficient):
+def blur_text(results, image, blur_function):
     for bbox, text, confidence in results:
         x_coords = [int(p[0]) for p in bbox]
         y_coords = [int(p[1]) for p in bbox]
 
         # Get the top-left and bottom-right
         bbox = (min(x_coords), min(y_coords), max(x_coords), max(y_coords))
-        blur(bbox, image, blur_coefficient)
+        blur(bbox, image, blur_function)
 
 
 def process_images(dir_path: Path):
     items_to_blur = [62, 63]  # tv, laptop
     model = YOLO("yolo12x.pt")
     reader = easyocr.Reader(["en", "no"], gpu=True)
-    blur_coefficient = 100 * 2 + 1
+
+    def blur_function(roi):
+        blur_coefficient = 0.05 * 3
+        h, w = roi.shape[:2]
+        ksize = (int(h * blur_coefficient) | 1, int(w * blur_coefficient) | 1)
+        return cv2.GaussianBlur(roi, ksize, 0)
 
     for root, _, files in os.walk(dir_path):
         for file in files:
@@ -61,10 +66,10 @@ def process_images(dir_path: Path):
                 continue
 
             results = model(image)
-            blur_items(results[0], items_to_blur, image, blur_coefficient)
+            blur_items(results[0], items_to_blur, image, blur_function)
 
             results_text = reader.readtext(image)
-            blur_text(results_text, image, blur_coefficient)
+            blur_text(results_text, image, blur_function)
             # Overwrite image
             cv2.imwrite(
                 (dir_path / file.name).with_suffix(".jpg"),
