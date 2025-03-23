@@ -10,7 +10,6 @@ wheels/
 .venv
 
 # Folders
-images
 datasets
 
 # resources
