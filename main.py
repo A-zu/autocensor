@@ -1,8 +1,9 @@
+import json
 import uuid
 import shutil
 from pathlib import Path
 
-from fastapi import FastAPI, File, HTTPException, Request, UploadFile
+from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 
 from file_processing import process_zip_file
@@ -38,7 +39,9 @@ async def exception_404(request, __):
 
 
 @app.post("/upload")
-async def upload_file(zipFile: UploadFile = File(...)):
+async def upload_zip_file(
+    zipFile: UploadFile = File(...), selectedItemIds: str = Form(None)
+):
     """
     Endpoint to handle ZIP file uploads and processing.
 
@@ -51,6 +54,13 @@ async def upload_file(zipFile: UploadFile = File(...)):
     if not zipFile.filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Only .zip files are allowed")
 
+    selected_items = []
+    if selectedItemIds:
+        selected_items = json.loads(selectedItemIds)
+
+    if not selected_items:
+        raise HTTPException(status_code=400, detail="No items were selected.")
+
     try:
         upload_id = str(uuid.uuid4())
         processed_id = str(uuid.uuid4())
@@ -60,7 +70,7 @@ async def upload_file(zipFile: UploadFile = File(...)):
             shutil.copyfileobj(zipFile.file, buffer)
 
         processed_file_path = process_zip_file(
-            uploaded_file_path, processed_id, PROCESSED_DIR
+            uploaded_file_path, processed_id, PROCESSED_DIR, selected_items
         )
 
         # Store the mapping of ID to processed file path

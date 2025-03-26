@@ -36,8 +36,7 @@ def blur_text(results, image, blur_function):
         blur(bbox, image, blur_function)
 
 
-def process_images(dir_path: Path):
-    items_to_blur = [62, 63]  # tv, laptop
+def process_images(dir_path: Path, items_to_blur):
     model = YOLO("yolo12x.pt")
     reader = easyocr.Reader(["en", "no"], gpu=True)
 
@@ -68,8 +67,11 @@ def process_images(dir_path: Path):
             results = model(image)
             blur_items(results[0], items_to_blur, image, blur_function)
 
-            results_text = reader.readtext(image)
-            blur_text(results_text, image, blur_function)
+            # 80 -> id of text
+            if 80 in items_to_blur:
+                results_text = reader.readtext(image)
+                blur_text(results_text, image, blur_function)
+
             # Overwrite image
             cv2.imwrite(
                 (dir_path / file.name).with_suffix(".jpg"),
@@ -81,7 +83,9 @@ def process_images(dir_path: Path):
                 file.unlink()
 
 
-def process_zip_file(uploaded_file_path: Path, processed_id, processed_dir):
+def process_zip_file(
+    uploaded_file_path: Path, processed_id, processed_dir: Path, selected_items
+):
     original_filename = uploaded_file_path.name.split("_", 1)[
         1
     ]  # Remove the UUID prefix
@@ -95,7 +99,7 @@ def process_zip_file(uploaded_file_path: Path, processed_id, processed_dir):
         with zipfile.ZipFile(uploaded_file_path, "r") as zip_ref:
             zip_ref.extractall(temp_dir_path)
 
-        process_images(temp_dir_path)
+        process_images(temp_dir_path, selected_items)
 
         with zipfile.ZipFile(processed_file_path, "w", zipfile.ZIP_DEFLATED) as zipf:
             for root, _, files in os.walk(temp_dir_path):
