@@ -86,7 +86,7 @@ async def upload_zip_file(
             status_code=200,
             content={
                 "status": "success",
-                "message": f"File processed successfully. Click to download.",
+                "message": "File processed successfully. Click to download.",
                 "processedFileId": processed_id,
             },
         )
@@ -94,7 +94,7 @@ async def upload_zip_file(
     except Exception as e:
         print(f"Error processing file: {str(e)}")
         raise HTTPException(
-            status_code=500, detail=f"Error processing file: 500 Internal Server Error"
+            status_code=500, detail="Error processing file: 500 Internal Server Error"
         )
 
 
