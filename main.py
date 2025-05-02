@@ -5,7 +5,9 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from pydantic import BaseModel
 
+from chat import generate_keywords
 from file_processing import process_zip_file
 
 app = FastAPI()
@@ -16,6 +18,10 @@ UPLOAD_DIR.mkdir(exist_ok=True)
 PROCESSED_DIR.mkdir(exist_ok=True)
 
 processed_files = {}
+
+
+class ChatRequest(BaseModel):
+    message: str
 
 
 @app.middleware("http")
@@ -123,6 +129,39 @@ async def example_zip():
     return FileResponse(
         path="static/example.zip", filename="example.zip", media_type="application/zip"
     )
+
+
+@app.post("/chat")
+async def process_chat(data: ChatRequest):
+    """
+    Endpoint to process chat messages and return selected items.
+
+    Args:
+        chat_message: The chat message from the user
+
+    Returns:
+        JSON response with message and selected items
+    """
+    try:
+        # Process the message (in a real application, this might involve NLP or other processing)
+        message = data.message.lower()
+
+        # Simple keyword-based logic to determine which items to select
+        selectedItemIds = generate_keywords(message)
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "message": f"Processed message: '{data.message}'",
+                "selectedItemIds": selectedItemIds,
+            },
+        )
+
+    except Exception as e:
+        print(f"Error processing chat message: {str(e)}")
+        raise HTTPException(
+            status_code=500, detail=f"Error processing chat message: {str(e)}"
+        )
 
 
 # Run the app with uvicorn

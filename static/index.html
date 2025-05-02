@@ -241,6 +241,50 @@
       .multiselect-arrow.up {
         transform: rotate(-135deg);
       }
+      .chat-container {
+            margin: 2rem 0;
+            padding-top: 1.5rem;
+            border-top: 1px solid #eee;
+        }
+      .chat-title {
+          text-align: center;
+          margin-bottom: 1rem;
+          color: #333;
+          font-size: 1.5rem;
+      }
+      .chat-box {
+          width: 100%;
+          max-width: 600px;
+          margin: 0 auto;
+      }
+      .chat-input {
+          width: 100%;
+          padding: 0.75rem;
+          border: 1px solid #ddd;
+          border-radius: 4px;
+          margin-bottom: 1rem;
+          font-family: inherit;
+          font-size: 1rem;
+          resize: vertical;
+          min-height: 80px;
+      }
+      .chat-input:focus {
+          outline: none;
+          border-color: #4a90e2;
+          box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
+      }
+      .chat-submit {
+          background-color: #4a90e2;
+          color: white;
+      }
+      .chat-submit:hover {
+          background-color: #3a7bc8;
+      }
+      .chat-status {
+          text-align: center;
+          margin-top: 1rem;
+          font-size: 0.9rem;
+      }
     </style>
   </head>
   <body>
@@ -317,6 +361,16 @@
       </div>
     </form>
 
+    <!-- Chat Box Section -->
+    <div class="chat-container">
+      <h2 class="chat-title">Chat with the System</h2>
+      <div class="chat-box">
+          <textarea id="chat-input" class="chat-input" placeholder="Type your message here..."></textarea>
+          <button type="button" id="chat-submit" class="btn chat-submit">Submit</button>
+          <div id="chat-status" class="chat-status"></div>
+      </div>
+    </div>
+
     <div class="example-container">
       <p class="example-text">Don't have a ZIP file? Download an example:</p>
       <button type="button" id="example-btn" class="btn example-btn">
@@ -340,6 +394,11 @@
       const errorMessage = document.getElementById("error-message");
       const downloadFrame = document.getElementById("download-frame");
       const statusMessage = document.getElementById("status-message");
+
+      // Chat elements
+      const chatInput = document.getElementById('chat-input');
+      const chatSubmit = document.getElementById('chat-submit');
+      const chatStatus = document.getElementById('chat-status');
 
       let selectedFile = null;
       let processedFileId = null;
@@ -557,6 +616,7 @@
 
         selectedItemIds.forEach((id) => {
           const item = items.find((item) => item.id === id);
+          if (!item) return;
 
           const tag = document.createElement("div");
           tag.className = "multiselect-tag";
@@ -611,6 +671,9 @@
       exampleBtn.addEventListener("click", () => {
         downloadFrame.src = exampleEndpoint;
       });
+
+      // Handle chat submit button click
+      chatSubmit.addEventListener('click', handleChatSubmit);
 
       function preventDefaults(e) {
         e.preventDefault();
@@ -781,6 +844,61 @@
 
         // Don't reset selected items - keep them for the next upload
       }
+
+      // Handle chat submission
+      async function handleChatSubmit() {
+            const message = chatInput.value.trim();
+            
+            if (!message) {
+                chatStatus.textContent = 'Please enter a message';
+                chatStatus.style.color = '#e74c3c';
+                return;
+            }
+            
+            try {
+                // Show loading state
+                chatSubmit.disabled = true;
+                chatStatus.textContent = 'Sending message...';
+                chatStatus.style.color = '#666';
+                
+                // Send the message to the server
+                const response = await fetch('/chat', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ message })
+                });
+                
+                if (response.ok) {
+                    const data = await response.json();
+                    
+                    // Update the selected items based on the response
+                    if (data.selectedItemIds && Array.isArray(data.selectedItemIds)) {
+                        selectedItemIds = data.selectedItemIds;
+                        updateSelectedItems();
+                        renderMultiselectOptions();
+                    }
+                    
+                    // Show success message
+                    chatStatus.textContent = data.message || 'Message processed successfully';
+                    chatStatus.style.color = '#27ae60';
+                    
+                    // Clear the chat input
+                    chatInput.value = '';
+                } else {
+                    const errorData = await response.json();
+                    throw new Error(errorData.detail || 'Failed to process message');
+                }
+            } catch (error) {
+                // Show error message
+                chatStatus.textContent = error.message;
+                chatStatus.style.color = '#e74c3c';
+            } finally {
+                // Re-enable the submit button
+                chatSubmit.disabled = false;
+            }
+        }
 
       // Initialize the multiselect dropdown
       initMultiselect();
