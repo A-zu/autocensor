@@ -10,6 +10,8 @@ COPY pyproject.toml .
 RUN uv sync
 
 COPY main.py .
+COPY chat.py .
+COPY prompt.txt .
 COPY file_processing.py .
 COPY static/index.html static/index.html
 COPY static/example.zip static/example.zip

@@ -22,7 +22,6 @@ services:
       - blur-net
     volumes:
       - ollama:/root/.ollama
-    command: ollama pull qwen3:4b
     deploy:
       resources:
         reservations:

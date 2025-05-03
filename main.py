@@ -166,6 +166,9 @@ async def process_chat(data: ChatRequest):
 
 # Run the app with uvicorn
 if __name__ == "__main__":
+    import ollama
     import uvicorn
+
+    ollama.pull("qwen3:4b")
 
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
