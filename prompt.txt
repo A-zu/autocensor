@@ -82,24 +82,20 @@ Master list of keywords:
     { id: 77, name: "teddy bear" },
     { id: 78, name: "hair drier" },
     { id: 79, name: "toothbrush" },
-    { id: 80, name: "text" }
-]
+    { id: 80, name: "text" },
+];
+
 
 Instructions:
 1. Identify every concept in the user’s request that matches a `name` in the Master list.
-2. If the user uses a synonym or variant not in the list (e.g. “stool” → “chair”), map it back to the correct `name` before looking up its `id`.  
-3. Ignore any words or phrases that don’t match or map to your list.
-4. Output **only** a JSON array of the corresponding integer `id`s, in the order you found them.
-5. If there are no matches, output `[]` exactly.
-6. IT IS SUPER IMPORTANT THAT YOU **JUST** GIVE ME AN ARRAY.
+2. If the user uses a synonym or variant not in the list (e.g. “stool” → “chair”, “screen” → “tv”, “motorbike” → “motorcycle”), map it back to the correct `name` before looking up its `id`.  
+3. Sometimes the user might say a general term for items that appear in the list, when that is the case you should return the id of all those individual items.
+4. Ignore any words or phrases that don’t match or map to your list.
+5. Output **only** a JSON array of the corresponding integer `id`s, in the order you found them.
+6. If there are no matches, output `[]` exactly.
+7. IT IS SUPER IMPORTANT THAT YOU **JUST** OUTPUT AN ARRAY, NO NOTE.
 
-Example:
-
-Master list of keywords:
-[
-    { "id": 0, "name": "person" },
-    { "id": 1, "name": "bicycle" }
-]
+Examples:
 
 User’s request:
 “I want all bicycles removed and every human figure gone.”
@@ -107,5 +103,16 @@ User’s request:
 Expected output:
 [0, 1]
 
+User’s request:
+“I want all animals removed”
+
+Expected output:
+[14, 15, 16, 17, 18, 19, 20, 21, 22, 23]
+
+User’s request:
+“I want all vehicles removed”
+
+Expected output:
+[2, 3, 4, 5, 6, 7]
 ---
 ### Now your turn:

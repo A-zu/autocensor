@@ -5,7 +5,7 @@ import ollama
 
 
 def generate_keywords(
-    user_input: str, model: str = "llama3.2", prompt_file: str = "prompt.txt"
+    user_input: str, model: str = "qwen3:4b", prompt_file: str = "prompt.txt"
 ) -> List[int]:
     prefix = Path(prompt_file).read_text(encoding="utf-8")
     full_prompt = f"{prefix.strip()}\n\nUser input:\n{user_input.strip()}\n\nResponse:"
@@ -16,6 +16,7 @@ def generate_keywords(
 
     output = response["response"].strip()
 
+    think, output = output.split("</think>")
     # Clean model output (handle code block formatting)
     if output.startswith("```"):
         output = output.strip("`").strip()
