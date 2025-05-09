@@ -18,7 +18,7 @@ def generate_keywords(
 
     think, output = output.split("</think>")
     # Clean model output (handle code block formatting)
-    if output.startswith("```"):
+    if output.startswith("\n\n```"):
         output = output.strip("`").strip()
         if output.lower().startswith("json"):
             output = output[4:].strip()
