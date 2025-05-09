@@ -8,6 +8,7 @@ dependencies = [
     "easyocr>=1.7.2",
     "fastapi>=0.115.12",
     "numpy>=2.2.5",
+    "ollama>=0.4.8",
     "opencv-python>=4.11.0.86",
     "pillow>=11.2.1",
     "pillow-heif>=0.22.0",

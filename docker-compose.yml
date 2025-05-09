@@ -1,0 +1,36 @@
+name: blur
+services:
+  ai-blur:
+    restart: unless-stopped
+    build:
+      context: .
+      dockerfile: Dockerfile
+    environment:
+      OLLAMA_HOST: ollama:11434
+    networks:
+      - blur-net
+    ports:
+      - "8000:8000"
+    depends_on:
+      - ollama
+
+  ollama:
+    restart: unless-stopped
+    image: ollama/ollama
+    pull_policy: always
+    networks:
+      - blur-net
+    volumes:
+      - ollama:/root/.ollama
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [ gpu ]
+
+networks:
+  blur-net:
+volumes:
+  ollama:
