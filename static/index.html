@@ -242,20 +242,20 @@
         transform: rotate(-135deg);
       }
       .chat-container {
-            margin: 2rem 0;
-            padding-top: 1.5rem;
-            border-top: 1px solid #eee;
-        }
+        margin: 2rem 0;
+        padding-top: 1.5rem;
+        border-top: 1px solid #eee;
+      }
       .chat-title {
-          text-align: center;
-          margin-bottom: 1rem;
-          color: #333;
-          font-size: 1.5rem;
+        text-align: center;
+        margin-bottom: 1rem;
+        color: #333;
+        font-size: 1.5rem;
       }
       .chat-box {
-          width: 100%;
-          max-width: 600px;
-          margin: 0 auto;
+        width: 100%;
+        max-width: 600px;
+        margin: 0 auto;
       }
       .chat-input {
           width: 100%;
@@ -281,6 +281,7 @@
           background-color: #3a7bc8;
       }
       .chat-status {
+          display: flex;
           text-align: center;
           margin-top: 1rem;
           font-size: 0.9rem;
@@ -354,7 +355,6 @@
       <button type="button" id="action-btn" class="btn upload-btn" disabled>
         Upload File
       </button>
-
       <div class="status-container">
         <div id="loader" class="loader"></div>
         <div id="status-message" class="success-message hidden"></div>
@@ -365,9 +365,14 @@
     <div class="chat-container">
       <h2 class="chat-title">Chat with the System</h2>
       <div class="chat-box">
-          <textarea id="chat-input" class="chat-input" placeholder="Type your message here..."></textarea>
-          <button type="button" id="chat-submit" class="btn chat-submit">Submit</button>
-          <div id="chat-status" class="chat-status"></div>
+        <textarea id="chat-input" class="chat-input" placeholder="Type your message here..."></textarea>
+        <button type="button" id="chat-submit" class="btn chat-submit">
+          Submit
+        </button>
+        <div class="status-container">
+          <div id="chat-loader" class="loader"></div>
+          <div id="chat-status-text" class="success-message hidden"></div>
+        </div>
       </div>
     </div>
 
@@ -399,6 +404,8 @@
       const chatInput = document.getElementById('chat-input');
       const chatSubmit = document.getElementById('chat-submit');
       const chatStatus = document.getElementById('chat-status');
+      const chatLoader = document.getElementById('chat-loader');
+      const chatStatusText = document.getElementById('chat-status-text');
 
       let selectedFile = null;
       let processedFileId = null;
@@ -849,17 +856,12 @@
       async function handleChatSubmit() {
             const message = chatInput.value.trim();
             
-            if (!message) {
-                chatStatus.textContent = 'Please enter a message';
-                chatStatus.style.color = '#e74c3c';
-                return;
-            }
-            
             try {
                 // Show loading state
                 chatSubmit.disabled = true;
-                chatStatus.textContent = 'Sending message...';
-                chatStatus.style.color = '#666';
+                chatSubmit.textContent = 'Thinking...';
+                chatSubmit.style.color = '#666';
+                chatLoader.style.display = 'inline-block';
                 
                 // Send the message to the server
                 const response = await fetch('/chat', {
@@ -881,8 +883,8 @@
                     }
                     
                     // Show success message
-                    chatStatus.textContent = data.message || 'Message processed successfully';
-                    chatStatus.style.color = '#27ae60';
+                    chatStatusText.textContent = data.message || 'Message processed successfully';
+                    chatStatusText.style.color = '#27ae60';
                     
                     // Clear the chat input
                     chatInput.value = '';
@@ -892,11 +894,14 @@
                 }
             } catch (error) {
                 // Show error message
-                chatStatus.textContent = error.message;
-                chatStatus.style.color = '#e74c3c';
+                chatStatusText.textContent = error.message;
+                chatStatusText.style.color = '#e74c3c';
             } finally {
-                // Re-enable the submit button
+                // Re-enable the submit button and hide loader
                 chatSubmit.disabled = false;
+                chatSubmit.textContent = 'Submit';
+                chatSubmit.style.color = 'white';
+                chatLoader.style.display = 'none';
             }
         }
 
