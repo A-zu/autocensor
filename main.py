@@ -168,7 +168,17 @@ async def process_chat(data: ChatRequest):
 if __name__ == "__main__":
     import ollama
     import uvicorn
+    import threading
 
-    ollama.pull("qwen3:4b")
+    def download_model():
+        print("INFO:     Starting model download...")
+        try:
+            ollama.pull("qwen3:4b")
+            print("INFO:     Model download complete.")
+        except Exception as e:
+            print(f"ERROR:     Failed to download model: {e}")
+
+    download_thread = threading.Thread(target=download_model)
+    download_thread.start()
 
     uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)

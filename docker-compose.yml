@@ -7,6 +7,7 @@ services:
       dockerfile: Dockerfile
     environment:
       OLLAMA_HOST: ollama:11434
+      YOLO_CONFIG_DIR: /yolo/config
     networks:
       - blur-net
     ports:
@@ -16,7 +17,7 @@ services:
 
   ollama:
     restart: unless-stopped
-    image: ollama/ollama
+    image: ollama/ollama:latest
     pull_policy: always
     networks:
       - blur-net
