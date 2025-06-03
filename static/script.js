@@ -1,58 +1,74 @@
 document.addEventListener("DOMContentLoaded", () => {
   // Elements
-  const loader = document.getElementById("loader")
-  const dropArea = document.getElementById("drop-area")
-  const fileInfo = document.getElementById("file-info")
-  const fileName = document.getElementById("file-name")
-  const fileTypeBadge = document.getElementById("file-type-badge")
-  const fileIcon = document.getElementById("file-icon")
-  const actionBtn = document.getElementById("action-btn")
-  const browseBtn = document.getElementById("browse-btn")
-  const fileInput = document.getElementById("file-input")
-  const exampleBtn = document.getElementById("example-btn")
-  const examplePdfBtn = document.getElementById("example-pdf-btn")
-  const uploadForm = document.getElementById("upload-form")
-  const errorMessage = document.getElementById("error-message")
-  const downloadFrame = document.getElementById("download-frame")
-  const statusMessage = document.getElementById("status-message")
+  const loader = document.getElementById("loader");
+  const dropArea = document.getElementById("drop-area");
+  const fileInfo = document.getElementById("file-info");
+  const fileName = document.getElementById("file-name");
+  const fileTypeBadge = document.getElementById("file-type-badge");
+  const fileIcon = document.getElementById("file-icon");
+  const browseBtn = document.getElementById("browse-btn");
+  const fileInput = document.getElementById("file-input");
+  const sampleBtn = document.getElementById("sample-btn");
+  const samplePdfBtn = document.getElementById("sample-pdf-btn");
+  const uploadForm = document.getElementById("upload-form");
+  const errorMessage = document.getElementById("error-message");
+  const downloadFrame = document.getElementById("download-frame");
 
-  // Chat elements
-  const chatInput = document.getElementById("chat-input")
-  const chatSubmit = document.getElementById("chat-submit")
-  const chatLoader = document.getElementById("chat-loader")
-  const chatStatusText = document.getElementById("chat-status-text")
+  // Content sections
+  const instructionContent = document.getElementById("instruction-content");
+  const zipContent = document.getElementById("zip-content");
+  const pdfContent = document.getElementById("pdf-content");
+
+  // ZIP content elements
+  const chatInput = document.getElementById("chat-input");
+  const submitBtn = document.getElementById("submit-btn");
+  const submitLoader = document.getElementById("submit-loader");
+  const submitStatus = document.getElementById("submit-status");
+
+  // PDF content elements
+  const pdfChatInput = document.getElementById("pdf-chat-input");
+  const pdfSubmitBtn = document.getElementById("pdf-submit-btn");
+  const pdfSubmitLoader = document.getElementById("pdf-submit-loader");
+  const pdfSubmitStatus = document.getElementById("pdf-submit-status");
 
   // State variables
-  let selectedFile = null
-  let processedFileId = null
-  let fileType = null
+  let selectedFile = null;
+  let processedFileId = null;
+  let fileType = null;
 
   // Fix URL path if needed
-  if (window.location.pathname.endsWith("/") && window.location.pathname !== "/") {
-    const newUrl = window.location.pathname.slice(0, -1) + window.location.search + window.location.hash
-    window.history.replaceState(null, "", newUrl)
+  if (
+    window.location.pathname.endsWith("/") &&
+    window.location.pathname !== "/"
+  ) {
+    const newUrl =
+      window.location.pathname.slice(0, -1) +
+      window.location.search +
+      window.location.hash;
+    window.history.replaceState(null, "", newUrl);
   }
 
   // API endpoints
-  let root = window.location.href
+  let root = window.location.href;
   if (window.location.pathname === "/") {
-    root = ""
+    root = "";
   }
 
-  const uploadEndpoint = `${root}/upload`
-  const redactEndpoint = `${root}/redact`
-  const downloadEndpoint = `${root}/download`
-  const exampleZipEndpoint = `${root}/example-zip`
-  const examplePdfEndpoint = `${root}/example-pdf`
+  const uploadEndpoint = `${root}/upload`;
+  const redactEndpoint = `${root}/redact`;
+  const downloadEndpoint = `${root}/download`;
+  const sampleZipEndpoint = `${root}/sample-zip`;
+  const samplePdfEndpoint = `${root}/sample-pdf`;
+  const chatEndpoint = `${root}/chat`;
 
   // Multiselect elements
-  const multiselectBtn = document.getElementById("multiselect-btn")
-  const multiselectOptions = document.getElementById("multiselect-options")
-  const multiselectText = document.getElementById("multiselect-text")
-  const multiselectSearch = document.getElementById("multiselect-search")
-  const multiselectItems = document.getElementById("multiselect-items")
-  const multiselectSelected = document.getElementById("multiselect-selected")
-  const multiselectArrow = multiselectBtn.querySelector(".multiselect-arrow")
+  const multiselectBtn = document.getElementById("multiselect-btn");
+  const multiselectOptions = document.getElementById("multiselect-options");
+  const multiselectText = document.getElementById("multiselect-text");
+  const multiselectSearch = document.getElementById("multiselect-search");
+  const multiselectItems = document.getElementById("multiselect-items");
+  const multiselectSelected = document.getElementById("multiselect-selected");
+  const multiselectArrow = multiselectBtn.querySelector(".multiselect-arrow");
 
   // Available items for the multiselect dropdown
   const items = [
@@ -137,435 +153,457 @@ document.addEventListener("DOMContentLoaded", () => {
     { id: 78, name: "hair drier" },
     { id: 79, name: "toothbrush" },
     { id: 80, name: "text" },
-  ]
+  ];
 
   // Selected item IDs - set default selections
-  let selectedItemIds = [62, 63, 80] // tv, laptop, text
+  let selectedItemIds = [62, 63, 80]; // tv, laptop, text
 
   // Initialize multiselect dropdown
   function initMultiselect() {
     // Populate options
-    renderMultiselectOptions()
+    renderMultiselectOptions();
 
     // Update selected items display for default selections
-    updateSelectedItems()
+    updateSelectedItems();
 
     // Toggle dropdown on button click
     multiselectBtn.addEventListener("click", () => {
-      multiselectOptions.classList.toggle("show")
-      multiselectArrow.classList.toggle("up")
+      multiselectOptions.classList.toggle("show");
+      multiselectArrow.classList.toggle("up");
       if (multiselectOptions.classList.contains("show")) {
-        multiselectSearch.focus()
+        multiselectSearch.focus();
       }
-    })
+    });
 
     // Close dropdown when clicking outside
     document.addEventListener("click", (e) => {
       if (!e.target.closest(".multiselect-dropdown")) {
-        multiselectOptions.classList.remove("show")
-        multiselectArrow.classList.remove("up")
+        multiselectOptions.classList.remove("show");
+        multiselectArrow.classList.remove("up");
       }
-    })
+    });
 
     // Search functionality
     multiselectSearch.addEventListener("input", () => {
-      const searchTerm = multiselectSearch.value.toLowerCase()
-      renderMultiselectOptions(searchTerm)
-    })
+      const searchTerm = multiselectSearch.value.toLowerCase();
+      renderMultiselectOptions(searchTerm);
+    });
   }
 
   // Render multiselect options
   function renderMultiselectOptions(searchTerm = "") {
-    multiselectItems.innerHTML = ""
+    multiselectItems.innerHTML = "";
 
     items.forEach((item) => {
       if (searchTerm === "" || item.name.toLowerCase().includes(searchTerm)) {
-        const option = document.createElement("div")
-        option.className = "multiselect-option"
+        const option = document.createElement("div");
+        option.className = "multiselect-option";
 
-        const checkbox = document.createElement("input")
-        checkbox.type = "checkbox"
-        checkbox.id = `item-${item.id}`
-        checkbox.checked = selectedItemIds.includes(item.id)
+        const checkbox = document.createElement("input");
+        checkbox.type = "checkbox";
+        checkbox.id = `item-${item.id}`;
+        checkbox.checked = selectedItemIds.includes(item.id);
 
-        const label = document.createElement("label")
-        label.htmlFor = `item-${item.id}`
-        label.textContent = item.name
+        const label = document.createElement("label");
+        label.htmlFor = `item-${item.id}`;
+        label.textContent = item.name;
 
-        option.appendChild(checkbox)
-        option.appendChild(label)
+        option.appendChild(checkbox);
+        option.appendChild(label);
 
         option.addEventListener("click", (e) => {
           if (e.target !== checkbox) {
-            checkbox.checked = !checkbox.checked
+            checkbox.checked = !checkbox.checked;
           }
 
           if (checkbox.checked) {
             if (!selectedItemIds.includes(item.id)) {
-              selectedItemIds.push(item.id)
+              selectedItemIds.push(item.id);
             }
           } else {
-            selectedItemIds = selectedItemIds.filter((id) => id !== item.id)
+            selectedItemIds = selectedItemIds.filter((id) => id !== item.id);
           }
 
-          updateSelectedItems()
-        })
+          updateSelectedItems();
+        });
 
-        multiselectItems.appendChild(option)
+        multiselectItems.appendChild(option);
       }
-    })
+    });
   }
 
   // Update selected items display
   function updateSelectedItems() {
-    multiselectSelected.innerHTML = ""
+    multiselectSelected.innerHTML = "";
 
     if (selectedItemIds.length === 0) {
-      multiselectText.textContent = "Select items..."
-      multiselectText.className = "multiselect-placeholder"
-      return
+      multiselectText.textContent = "Select items...";
+      multiselectText.className = "multiselect-placeholder";
+      return;
     }
 
-    multiselectText.textContent = `${selectedItemIds.length} item(s) selected`
-    multiselectText.className = ""
+    multiselectText.textContent = `${selectedItemIds.length} item(s) selected`;
+    multiselectText.className = "";
 
     selectedItemIds.forEach((id) => {
-      const item = items.find((item) => item.id === id)
-      if (!item) return
+      const item = items.find((item) => item.id === id);
+      if (!item) return;
 
-      const tag = document.createElement("div")
-      tag.className = "multiselect-tag"
-      tag.textContent = item.name
+      const tag = document.createElement("div");
+      tag.className = "multiselect-tag";
+      tag.textContent = item.name;
 
-      const removeBtn = document.createElement("span")
-      removeBtn.className = "multiselect-tag-remove"
-      removeBtn.textContent = "×"
+      const removeBtn = document.createElement("span");
+      removeBtn.className = "multiselect-tag-remove";
+      removeBtn.textContent = "×";
       removeBtn.addEventListener("click", (e) => {
-        e.stopPropagation()
-        selectedItemIds = selectedItemIds.filter((itemId) => itemId !== id)
-        updateSelectedItems()
-        renderMultiselectOptions(multiselectSearch.value.toLowerCase())
-      })
+        e.stopPropagation();
+        selectedItemIds = selectedItemIds.filter((itemId) => itemId !== id);
+        updateSelectedItems();
+        renderMultiselectOptions(multiselectSearch.value.toLowerCase());
+      });
 
-      tag.appendChild(removeBtn)
-      multiselectSelected.appendChild(tag)
-    })
+      tag.appendChild(removeBtn);
+      multiselectSelected.appendChild(tag);
+    });
   }
 
   // Handle browse button click
   browseBtn.addEventListener("click", () => {
-    fileInput.click()
-  })
+    fileInput.click();
+  });
 
   // Handle file selection via input
-  fileInput.addEventListener("change", handleFileSelect)
+  fileInput.addEventListener("change", handleFileSelect);
 
   // Prevent default drag behaviors
-  ;["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
-    dropArea.addEventListener(eventName, preventDefaults, false)
-    document.body.addEventListener(eventName, preventDefaults, false)
-  })
+  ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
+    dropArea.addEventListener(eventName, preventDefaults, false);
+    document.body.addEventListener(eventName, preventDefaults, false);
+  });
 
   // Highlight drop area when item is dragged over it
-  ;["dragenter", "dragover"].forEach((eventName) => {
-    dropArea.addEventListener(eventName, highlight, false)
-  })
+  ["dragenter", "dragover"].forEach((eventName) => {
+    dropArea.addEventListener(eventName, highlight, false);
+  });
 
   // Remove highlight when item is dragged out or dropped
-  ;["dragleave", "drop"].forEach((eventName) => {
-    dropArea.addEventListener(eventName, unhighlight, false)
-  })
+  ["dragleave", "drop"].forEach((eventName) => {
+    dropArea.addEventListener(eventName, unhighlight, false);
+  });
 
   // Handle dropped files
-  dropArea.addEventListener("drop", handleDrop, false)
+  dropArea.addEventListener("drop", handleDrop, false);
 
-  // Handle action button click (upload or download)
-  actionBtn.addEventListener("click", handleActionButtonClick)
+  // Handle sample button clicks
+  sampleBtn.addEventListener("click", () => {
+    downloadFrame.src = sampleZipEndpoint;
+  });
 
-  // Handle example button click
-  exampleBtn.addEventListener("click", () => {
-    downloadFrame.src = exampleZipEndpoint
-  })
+  samplePdfBtn.addEventListener("click", () => {
+    downloadFrame.src = samplePdfEndpoint;
+  });
 
-  // Handle example PDF button click
-  examplePdfBtn.addEventListener("click", () => {
-    downloadFrame.src = examplePdfEndpoint
-  })
-
-  // Handle chat submit button click
-  chatSubmit.addEventListener("click", handleChatSubmit)
+  // Handle submit button clicks
+  submitBtn.addEventListener("click", handleZipSubmit);
+  pdfSubmitBtn.addEventListener("click", handlePdfSubmit);
 
   function preventDefaults(e) {
-    e.preventDefault()
-    e.stopPropagation()
+    e.preventDefault();
+    e.stopPropagation();
   }
 
   function highlight() {
-    dropArea.classList.add("drag-over")
+    dropArea.classList.add("drag-over");
   }
 
   function unhighlight() {
-    dropArea.classList.remove("drag-over")
+    dropArea.classList.remove("drag-over");
   }
 
   function handleDrop(e) {
-    const dt = e.dataTransfer
-    const files = dt.files
+    const dt = e.dataTransfer;
+    const files = dt.files;
 
     if (files.length > 0) {
-      validateAndProcessFile(files[0])
+      validateAndProcessFile(files[0]);
     }
   }
 
   function handleFileSelect(e) {
-    const files = e.target.files
+    const files = e.target.files;
 
     if (files.length > 0) {
-      validateAndProcessFile(files[0])
+      validateAndProcessFile(files[0]);
     }
   }
 
   function validateAndProcessFile(file) {
     // Reset UI elements
-    errorMessage.classList.add("hidden")
-    errorMessage.textContent = ""
-    statusMessage.classList.add("hidden")
-    statusMessage.textContent = ""
-
-    // Reset button to upload state if it was in download state
-    if (actionBtn.classList.contains("download-btn")) {
-      actionBtn.classList.remove("download-btn")
-      actionBtn.classList.add("upload-btn")
-      actionBtn.textContent = "Upload File"
-    }
+    errorMessage.classList.add("hidden");
+    errorMessage.textContent = "";
+    resetSubmitStates();
 
     // Check file type
-    const lowerCaseName = file.name.toLowerCase()
+    const lowerCaseName = file.name.toLowerCase();
 
     if (lowerCaseName.endsWith(".zip") || lowerCaseName.endsWith(".pdf")) {
       // Store the selected file
-      selectedFile = file
+      selectedFile = file;
 
       // Determine file type
-      fileType = lowerCaseName.endsWith(".zip") ? "zip" : "pdf"
+      fileType = lowerCaseName.endsWith(".zip") ? "zip" : "pdf";
 
       // Update file icon based on type
       if (fileType === "zip") {
         fileIcon.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M22 12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-9"/>
-            <path d="M5 12V5a1 1 0 0 1 1-1h12a1 1 0 0 1 1 1v7"/>
-            <path d="M12 12v9"/>
-            <path d="M12 12 8 8"/>
-            <path d="m12 12 4-4"/>
-          </svg>
-        `
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M22 12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-9"/>
+          <path d="M2 12V5a1 1 0 0 1 1-1h18a1 1 0 0 1 1 1v7"/>
+          <path d="M12 12v9"/>
+          <path d="M12 12 8 8"/>
+          <path d="m12 12 4-4"/>
+        </svg>
+      `;
       } else {
         fileIcon.innerHTML = `
-          <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-            <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
-            <polyline points="14 2 14 8 20 8"/>
-          </svg>
-        `
+        <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
+          <polyline points="14 2 14 8 20 8"/>
+        </svg>
+      `;
       }
 
       // Update file type badge
-      fileTypeBadge.textContent = fileType.toUpperCase()
-      fileTypeBadge.className = `file-type-badge ${fileType}`
+      fileTypeBadge.textContent = fileType.toUpperCase();
+      fileTypeBadge.className = `file-type-badge ${fileType}`;
 
       // Display file info
-      fileName.textContent = file.name
-      fileInfo.classList.remove("hidden")
+      fileName.textContent = file.name;
+      fileInfo.classList.remove("hidden");
 
-      // Enable upload button
-      actionBtn.disabled = false
+      // Show appropriate content section
+      showContentSection(fileType);
     } else {
       // Show error for unsupported files
-      errorMessage.textContent = "Please select a .zip or .pdf file"
-      errorMessage.classList.remove("hidden")
-      fileInfo.classList.add("hidden")
-      actionBtn.disabled = true
-      selectedFile = null
-      fileType = null
+      errorMessage.textContent = "Please select a .zip or .pdf file";
+      errorMessage.classList.remove("hidden");
+      fileInfo.classList.add("hidden");
+      selectedFile = null;
+      fileType = null;
     }
   }
 
-  async function handleActionButtonClick() {
-    // If button is in download state
-    if (actionBtn.classList.contains("download-btn")) {
-      // Trigger download of processed file
-      initiateDownload(processedFileId)
+  function showContentSection(type) {
+    // Hide all content sections
+    instructionContent.classList.add("hidden");
+    zipContent.classList.add("hidden");
+    pdfContent.classList.add("hidden");
 
-      // Reset UI after download is initiated
-      resetUI()
-      return
+    // Show appropriate section
+    if (type === "zip") {
+      zipContent.classList.remove("hidden");
+      submitBtn.disabled = false;
+    } else if (type === "pdf") {
+      pdfContent.classList.remove("hidden");
+      pdfSubmitBtn.disabled = false;
+    }
+  }
+
+  function resetSubmitStates() {
+    // Reset ZIP submit button
+    submitBtn.disabled = true;
+    submitBtn.textContent = "Submit";
+    submitBtn.className = "primary-btn";
+    submitLoader.style.display = "none";
+    submitStatus.classList.add("hidden");
+
+    // Reset PDF submit button
+    pdfSubmitBtn.disabled = true;
+    pdfSubmitBtn.textContent = "Submit";
+    pdfSubmitBtn.className = "primary-btn";
+    pdfSubmitLoader.style.display = "none";
+    pdfSubmitStatus.classList.add("hidden");
+  }
+
+  async function handleZipSubmit() {
+    if (!selectedFile) return;
+
+    // Disable file changes
+    dropArea.style.pointerEvents = "none";
+    browseBtn.disabled = true;
+
+    // If button is in download state, trigger download
+    if (submitBtn.classList.contains("success")) {
+      initiateDownload(processedFileId);
+      return;
     }
 
-    // If button is in upload state
-    if (selectedFile) {
-      try {
-        // Show loading state
-        actionBtn.disabled = true
-        actionBtn.textContent = "Processing..."
-        loader.style.display = "block"
+    try {
+      // Step 1: Chat processing
+      submitBtn.textContent = "Thinking...";
+      submitBtn.disabled = true;
+      submitLoader.style.display = "block";
 
-        // Create form data
-        const formData = new FormData()
+      const chatMessage = chatInput.value.trim();
 
-        // Add file to form data with the appropriate name
-        formData.append(fileType === "zip" ? "file" : "file", selectedFile)
-
-        // Add selected item IDs to form data for ZIP files
-        if (fileType === "zip") {
-          formData.append("selectedItemIds", JSON.stringify(selectedItemIds))
-        }
-
-        // Add prompt for PDF files
-        if (fileType === "pdf") {
-          formData.append("prompt", "Redact sensitive information")
-        }
-
-        // Determine which endpoint to use based on file type
-        const endpoint = fileType === "zip" ? uploadEndpoint : redactEndpoint
-
-        // Send the file to the server
-        const response = await fetch(endpoint, {
+      if (chatMessage) {
+        const chatResponse = await fetch(chatEndpoint, {
           method: "POST",
-          body: formData,
-        })
+          headers: {
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ message: chatMessage }),
+        });
 
-        // Hide loader
-        loader.style.display = "none"
+        if (chatResponse.ok) {
+          const chatData = await chatResponse.json();
 
-        if (response.ok) {
-          const data = await response.json()
-
-          // Store the processed file ID
-          processedFileId = data.processedFileId
-
-          // Show success message
-          statusMessage.textContent = data.message || "File processed successfully"
-          statusMessage.classList.remove("hidden")
-
-          // Change button to download state
-          actionBtn.classList.remove("upload-btn")
-          actionBtn.classList.add("download-btn")
-          actionBtn.textContent = "Download Processed File"
-          actionBtn.disabled = false
-        } else {
-          const errorData = await response.json()
-          throw new Error(errorData.detail || "Upload failed")
+          // Update selected items if provided
+          if (
+            chatData.selectedItemIds &&
+            Array.isArray(chatData.selectedItemIds)
+          ) {
+            selectedItemIds = chatData.selectedItemIds;
+            updateSelectedItems();
+            renderMultiselectOptions();
+          }
         }
-      } catch (error) {
-        // Show error message
-        errorMessage.textContent = error.message
-        errorMessage.classList.remove("hidden")
-
-        // Reset button
-        actionBtn.textContent = "Upload File"
-        actionBtn.disabled = false
       }
+
+      // Step 2: File upload processing
+      submitBtn.textContent = "Processing...";
+
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("selectedItemIds", JSON.stringify(selectedItemIds));
+
+      const uploadResponse = await fetch(uploadEndpoint, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (uploadResponse.ok) {
+        const uploadData = await uploadResponse.json();
+        processedFileId = uploadData.processedFileId;
+
+        // Success state
+        submitBtn.textContent = "Download";
+        submitBtn.className = "primary-btn success";
+        submitBtn.disabled = false;
+        submitLoader.style.display = "none";
+
+        submitStatus.textContent =
+          uploadData.message || "File processed successfully";
+        submitStatus.classList.remove("hidden");
+
+        // Remove this line: submitBtn.onclick = () => initiateDownload(processedFileId)
+      } else {
+        throw new Error("Upload failed");
+      }
+    } catch (error) {
+      submitBtn.textContent = "Submit";
+      submitBtn.disabled = false;
+      submitLoader.style.display = "none";
+
+      submitStatus.textContent = error.message;
+      submitStatus.style.color = "var(--error-color)";
+      submitStatus.classList.remove("hidden");
+    }
+  }
+
+  async function handlePdfSubmit() {
+    if (!selectedFile) return;
+
+    // If button is in download state, trigger download
+    if (pdfSubmitBtn.classList.contains("success")) {
+      initiateDownload(processedFileId);
+      return;
+    }
+
+    try {
+      // PDF processing
+      pdfSubmitBtn.textContent = "Processing...";
+      pdfSubmitBtn.disabled = true;
+      pdfSubmitLoader.style.display = "block";
+
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append(
+        "prompt",
+        pdfChatInput.value.trim() || "Redact sensitive information"
+      );
+
+      const response = await fetch(redactEndpoint, {
+        method: "POST",
+        body: formData,
+      });
+
+      if (response.ok) {
+        const data = await response.json();
+        processedFileId = data.processedFileId;
+
+        // Success state
+        pdfSubmitBtn.textContent = "Download";
+        pdfSubmitBtn.className = "primary-btn success";
+        pdfSubmitBtn.disabled = false;
+        pdfSubmitLoader.style.display = "none";
+
+        pdfSubmitStatus.textContent =
+          data.message || "File processed successfully";
+        pdfSubmitStatus.classList.remove("hidden");
+
+        // Remove this line: pdfSubmitBtn.onclick = () => initiateDownload(processedFileId)
+      } else {
+        throw new Error("Processing failed");
+      }
+    } catch (error) {
+      pdfSubmitBtn.textContent = "Submit";
+      pdfSubmitBtn.disabled = false;
+      pdfSubmitLoader.style.display = "none";
+
+      pdfSubmitStatus.textContent = error.message;
+      pdfSubmitStatus.style.color = "var(--error-color)";
+      pdfSubmitStatus.classList.remove("hidden");
     }
   }
 
   function initiateDownload(fileId) {
-    // Use the hidden iframe to trigger download without navigating away
-    downloadFrame.src = `${downloadEndpoint}/${fileId}`
+    downloadFrame.src = `${downloadEndpoint}/${fileId}`;
 
-    // Show a temporary message
-    statusMessage.textContent = "Download started..."
-
-    // Disable the button temporarily during download
-    actionBtn.disabled = true
-
-    // After a short delay, reset the UI to allow for a new upload
+    // Reset UI after download
     setTimeout(() => {
-      resetUI()
-    }, 1500)
+      resetUI();
+    }, 100);
   }
 
   function resetUI() {
-    // Reset button to upload state
-    actionBtn.classList.remove("download-btn")
-    actionBtn.classList.add("upload-btn")
-    actionBtn.textContent = "Upload File"
-    actionBtn.disabled = true
+    // Reset file state
+    selectedFile = null;
+    fileType = null;
+    processedFileId = null;
 
     // Clear file input
-    fileInput.value = ""
-    selectedFile = null
-    fileType = null
+    fileInput.value = "";
+    fileInfo.classList.add("hidden");
 
-    // Hide file info
-    fileInfo.classList.add("hidden")
+    // Re-enable file changes
+    dropArea.style.pointerEvents = "auto";
+    browseBtn.disabled = false;
 
-    // Update status message
-    statusMessage.textContent = "Ready for next file"
+    // Show instruction content
+    instructionContent.classList.remove("hidden");
+    zipContent.classList.add("hidden");
+    pdfContent.classList.add("hidden");
 
-    // Clear processed file ID
-    processedFileId = null
+    // Clear inputs
+    chatInput.value = "";
+    pdfChatInput.value = "";
 
-    // Don't reset selected items - keep them for the next upload
-  }
-
-  // Handle chat submission
-  async function handleChatSubmit() {
-    const message = chatInput.value.trim()
-
-    if (!message) return
-
-    try {
-      // Show loading state
-      chatSubmit.disabled = true
-      chatSubmit.textContent = "Thinking..."
-      chatLoader.style.display = "block"
-
-      // Send the message to the server
-      const response = await fetch("/chat", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({ message }),
-      })
-
-      if (response.ok) {
-        const data = await response.json()
-
-        // Update the selected items based on the response
-        if (data.selectedItemIds && Array.isArray(data.selectedItemIds)) {
-          selectedItemIds = data.selectedItemIds
-          updateSelectedItems()
-          renderMultiselectOptions()
-        }
-
-        // Show success message
-        chatStatusText.textContent = data.message || "Message processed successfully"
-        chatStatusText.classList.remove("hidden")
-
-        // Clear the chat input
-        chatInput.value = ""
-      } else {
-        const errorData = await response.json()
-        throw new Error(errorData.detail || "Failed to process message")
-      }
-    } catch (error) {
-      // Show error message
-      chatStatusText.textContent = error.message
-      chatStatusText.classList.remove("hidden")
-    } finally {
-      // Re-enable the submit button and hide loader
-      chatSubmit.disabled = false
-      chatSubmit.textContent = "Submit"
-      chatLoader.style.display = "none"
-
-      // Hide status message after a delay
-      setTimeout(() => {
-        chatStatusText.classList.add("hidden")
-      }, 3000)
-    }
+    // Reset submit states
+    resetSubmitStates();
   }
 
   // Initialize the multiselect dropdown
-  initMultiselect()
-})
+  initMultiselect();
+});

@@ -1,69 +1,62 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Automatic Image Blur</title>
-    <link rel="stylesheet" href="/static/styles.css">
-  </head>
-  <body>
-    <div class="app-container">
-      <header>
-        <h1>Automatic Image Blur</h1>
-        <p class="subtitle">Upload files for automatic processing</p>
-      </header>
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Automatic Image Blur</title>
+  <link rel="stylesheet" href="/static/styles.css">
+</head>
+<body>
+  <div class="app-container">
+    <header>
+      <h1>Automatic Image Blur</h1>
+      <p class="subtitle">Upload files for automatic processing</p>
+    </header>
 
-      <main>
-        <div class="content-grid">
-          <section class="upload-section">
-            <h2>File Upload</h2>
-            <form id="upload-form">
-              <div id="drop-area" class="upload-container">
-                <div class="upload-icon">
-                  <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
-                    <polyline points="17 8 12 3 7 8"></polyline>
-                    <line x1="12" y1="3" x2="12" y2="15"></line>
-                  </svg>
+    <main>
+      <div class="content-grid">
+        <section class="upload-section">
+          <h2>File Upload</h2>
+          <form id="upload-form">
+            <div id="drop-area" class="upload-container">
+              <div class="upload-icon">
+                <svg xmlns="http://www.w3.org/2000/svg" width="48" height="48" viewBox="0 0 24 24" fill="none"
+                  stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"></path>
+                  <polyline points="17 8 12 3 7 8"></polyline>
+                  <line x1="12" y1="3" x2="12" y2="15"></line>
+                </svg>
+              </div>
+              <p>Drag & drop your file here</p>
+              <p class="upload-hint">Supports .zip and .pdf files</p>
+              <input type="file" id="file-input" name="file" accept=".zip,.pdf" style="display: none" />
+              <button type="button" id="browse-btn" class="secondary-btn">
+                Browse Files
+              </button>
+
+              <div id="file-info" class="file-info hidden">
+                <div class="file-preview">
+                  <span id="file-icon"></span>
+                  <span id="file-name" class="file-name"></span>
                 </div>
-                <p>Drag & drop your file here</p>
-                <p class="upload-hint">Supports .zip and .pdf files</p>
-                <input
-                  type="file"
-                  id="file-input"
-                  name="file"
-                  accept=".zip,.pdf"
-                  style="display: none"
-                />
-                <button type="button" id="browse-btn" class="secondary-btn">
-                  Browse Files
-                </button>
-
-                <div id="file-info" class="file-info hidden">
-                  <div class="file-preview">
-                    <span id="file-icon"></span>
-                    <span id="file-name" class="file-name"></span>
-                  </div>
-                  <span id="file-type-badge" class="file-type-badge"></span>
-                </div>
-
-                <div id="error-message" class="error-message hidden"></div>
+                <span id="file-type-badge" class="file-type-badge"></span>
               </div>
 
-              <div class="action-container">
-                <button type="button" id="action-btn" class="primary-btn" disabled>
-                  Upload File
-                </button>
-                <div class="status-container">
-                  <div id="loader" class="loader"></div>
-                  <div id="status-message" class="success-message hidden"></div>
-                </div>
-              </div>
-            </form>
-          </section>
+              <div id="error-message" class="error-message hidden"></div>
+            </div>
+          </form>
+        </section>
 
-          <section class="options-section">
-            <h2>Processing Options</h2>
+        <section class="options-section">
+          <h2>Processing Options</h2>
+
+          <div id="instruction-content" class="instruction-text">
+            <p>📁 Upload a <strong>.zip file</strong> to blur specific objects in images</p>
+            <p>📄 Upload a <strong>.pdf file</strong> to redact sensitive information</p>
+            <p>Select your file from the left panel to get started</p>
+          </div>
+
+          <div id="zip-content" class="hidden">
             <!-- Multi-select dropdown -->
             <div class="multiselect-container">
               <label for="multiselect" class="multiselect-label">
@@ -77,12 +70,7 @@
                   <span class="multiselect-arrow"></span>
                 </button>
                 <div class="multiselect-options" id="multiselect-options">
-                  <input
-                    type="text"
-                    class="multiselect-search"
-                    id="multiselect-search"
-                    placeholder="Search items..."
-                  />
+                  <input type="text" class="multiselect-search" id="multiselect-search" placeholder="Search items..." />
                   <div id="multiselect-items">
                     <!-- Options will be added here dynamically -->
                   </div>
@@ -95,44 +83,57 @@
 
             <div class="chat-box">
               <h3>Chat with the System</h3>
-              <textarea 
-                id="chat-input" 
-                class="chat-input" 
-                placeholder="Type your message here..."
-              ></textarea>
-              <button type="button" id="chat-submit" class="primary-btn">
-                Submit
-              </button>
-              <div class="status-container">
-                <div id="chat-loader" class="loader"></div>
-                <div id="chat-status-text" class="success-message hidden"></div>
+              <textarea id="chat-input" class="chat-input"
+                placeholder="Describe what you want to blur or ask questions..."></textarea>
+              <div class="submit-container">
+                <button type="button" id="submit-btn" class="primary-btn" disabled>
+                  Submit
+                </button>
+                <div id="submit-loader" class="loader"></div>
               </div>
+              <div id="submit-status" class="success-message hidden"></div>
             </div>
-          </section>
-        </div>
+          </div>
 
-        <section class="example-container">
-          <h2>Example Files</h2>
-          <p class="example-text">Don't have a file? Download an example:</p>
-          <div class="example-buttons">
-            <button type="button" id="example-btn" class="secondary-btn">
-              Download Example ZIP
-            </button>
-            <button type="button" id="example-pdf-btn" class="secondary-btn">
-              Download Example PDF
-            </button>
+          <div id="pdf-content" class="hidden">
+            <div class="chat-box">
+              <h3>Redaction Instructions</h3>
+              <textarea id="pdf-chat-input" class="chat-input"
+                placeholder="Describe what information should be redacted..."></textarea>
+              <div class="submit-container">
+                <button type="button" id="pdf-submit-btn" class="primary-btn" disabled>
+                  Submit
+                </button>
+                <div id="pdf-submit-loader" class="loader"></div>
+              </div>
+              <div id="pdf-submit-status" class="success-message hidden"></div>
+            </div>
           </div>
         </section>
-      </main>
+      </div>
 
-      <footer>
-        <p>&copy; 2025 Automatic Image Blur. All rights reserved.</p>
-      </footer>
-    </div>
+      <section class="example-container">
+        <h2>Sample Files</h2>
+        <p class="example-text">Don't have a file? Download a sample:</p>
+        <div class="example-buttons">
+          <button type="button" id="sample-btn" class="secondary-btn">
+            Download Sample ZIP
+          </button>
+          <button type="button" id="sample-pdf-btn" class="secondary-btn">
+            Download Sample PDF
+          </button>
+        </div>
+      </section>
+    </main>
 
-    <!-- Hidden iframe for downloads -->
-    <iframe id="download-frame" name="download-frame"></iframe>
+    <footer>
+      <p>&copy; 2025 Automatic Image Blur. All rights reserved.</p>
+    </footer>
+  </div>
 
-    <script src="/static/script.js"></script>
-  </body>
+  <!-- Hidden iframe for downloads -->
+  <iframe id="download-frame" name="download-frame"></iframe>
+
+  <script src="/static/script.js"></script>
+</body>
 </html>
