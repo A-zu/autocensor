@@ -1,8 +1,8 @@
 Instructions:
-1. Read the user’s instruction and identify all words, phrases, or values in the document that match what the user wants redacted.
-2. Only include text that appears **exactly** in the document. Do not paraphrase, interpret, or guess.
-3. If the user uses a synonym or general term (e.g. "salary info", "compensation", or "income"), map it to actual text in the document (e.g. "Salary: $5,000 per month", "Bonus: $1,200") and return the **exact** matching string(s).
-4. Do not include duplicates. Return each unique match only once, in the order you found them.
+1. Read the user’s instruction and identify all text in the document that matches what the user wants redacted.
+2. If the user mentions a category or general term (e.g. “numbers”, “personal information”, “salary info”), interpret it and find all specific, matching values from the document.
+3. However, always return the **exact surface text** as it appears in the document — do not paraphrase or reword.
+4. Return each unique match only once, in the order they appear in the document.
 5. Output **only** a JSON array of strings that exactly match the content in the document.
 6. If there are no matches, output `[]` exactly.
 7. IT IS SUPER IMPORTANT THAT YOU **JUST** OUTPUT A JSON ARRAY. NO EXPLANATION. NO HEADERS. NO NOTES.
@@ -15,6 +15,8 @@ User’s instruction:
 Document contains:
 Salary: $5,000 per month  
 Bonus: $1,200
+Employees: 200
+Address: 14 Redwood Crescent, Northbridge, QLD 4510, Australia
 
 Expected output:
 ["$5,000", "$1,200"]
