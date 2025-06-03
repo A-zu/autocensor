@@ -223,11 +223,20 @@ async def sample_pdf():
 
 # Run the app with uvicorn
 if __name__ == "__main__":
-    import ollama
     import uvicorn
     import threading
 
     def download_dependencies():
+        import ollama
+        import easyocr
+        from ultralytics import YOLO
+
+        print("INFO:     Dowloading EasyOCR model...")
+        easyocr.Reader(["en", "no"], gpu=True)
+
+        print("INFO:     Dowloading YOLO model...")
+        YOLO("yolo12x.pt")
+
         print("INFO:     Starting model download...")
         try:
             ollama.pull("qwen3:4b")
