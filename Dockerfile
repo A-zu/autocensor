@@ -17,4 +17,7 @@ COPY redact_prompt.txt .
 COPY file_processing.py .
 COPY static/ static/
 
+ENV OLLAMA_HOST=ollama:11434
+ENV YOLO_CONFIG_DIR=/yolo/config
+
 CMD ["uv", "run", "main.py"]
