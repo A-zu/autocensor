@@ -122,21 +122,12 @@ def create_processed_zip(processed_file_path: Path, temp_dir_path: Path):
 
 def process_zip_file(
     uploaded_file_path: Path,
-    processed_id: int,
-    processed_dir: Path,
+    output_path: Path,
     selected_items,
 ):
-    original_filename = uploaded_file_path.name.split("_", 1)[
-        1
-    ]  # Remove the UUID prefix
-    processed_filename = f"processed_{processed_id}_{original_filename}"
-    processed_file_path = processed_dir / processed_filename
-
     with tempfile.TemporaryDirectory() as temp_dir:
         temp_dir_path = Path(temp_dir)
 
         extract_zip(uploaded_file_path, temp_dir_path)
         process_images_in_temp_dir(temp_dir_path, selected_items)
-        create_processed_zip(processed_file_path, temp_dir_path)
-
-    return processed_file_path
+        create_processed_zip(output_path, temp_dir_path)
