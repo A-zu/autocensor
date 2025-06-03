@@ -253,11 +253,13 @@ if __name__ == "__main__":
 
         print("INFO:     Dowloading EasyOCR model...")
         easyocr.Reader(["en", "no"], gpu=True)
+        print("INFO:     Model download complete.")
 
         print("INFO:     Dowloading YOLO model...")
         YOLO("yolo12x.pt")
+        print("INFO:     Model download complete.")
 
-        print("INFO:     Starting model download...")
+        print("INFO:     Starting Ollama model download...")
         try:
             ollama.pull("qwen3:4b")
             print("INFO:     Model download complete.")
@@ -267,4 +269,4 @@ if __name__ == "__main__":
     download_thread = threading.Thread(target=download_dependencies)
     download_thread.start()
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
