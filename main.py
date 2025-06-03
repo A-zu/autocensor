@@ -1,12 +1,10 @@
 import json
 import uuid
-import shutil
 from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from pydantic import BaseModel
 
 from chat import generate_keywords, get_redactions
 from file_processing import process_zip_file
@@ -14,18 +12,12 @@ from redact import redact_pdf
 
 app = FastAPI()
 
-UPLOAD_DIR = Path("uploads")
-PROCESSED_DIR = Path("processed")
-UPLOAD_DIR.mkdir(exist_ok=True)
-PROCESSED_DIR.mkdir(exist_ok=True)
-
-processed_files = {}
+INPUT_DIR = Path("input")
+OUTPUT_DIR = Path("output")
+INPUT_DIR.mkdir(exist_ok=True)
+OUTPUT_DIR.mkdir(exist_ok=True)
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
-
-
-class ChatRequest(BaseModel):
-    message: str
 
 
 @app.middleware("http")
@@ -48,9 +40,7 @@ async def exception_404(request, __):
 
 
 @app.post("/upload")
-async def upload_zip_file(
-    file: UploadFile = File(...), selectedItemIds: str = Form(None)
-):
+async def upload_file(file: UploadFile = File(...)):
     """
     Endpoint to handle ZIP file uploads and processing.
 
@@ -60,37 +50,63 @@ async def upload_zip_file(
     Returns:
         JSON response with status, message, and processed file ID
     """
-    if not file.filename.lower().endswith(".zip"):
+    upload_id = str(uuid.uuid4())
+    uploaded_file_path = INPUT_DIR / f"{upload_id}_{file.filename}"
+
+    # Save uploaded file
+    with open(uploaded_file_path, "wb") as f:
+        f.write(await file.read())
+
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "message": "File uploaded successfully",
+            "fileId": uploaded_file_path.name,
+        },
+    )
+
+
+@app.post("/blur")
+async def upload_zip_file(file_id: str = Form(None), selectedItemIds: str = Form(None)):
+    """
+    Endpoint to handle ZIP file uploads and processing.
+
+    Args:
+        zipFile: The ZIP file uploaded by the user
+
+    Returns:
+        JSON response with status, message, and processed file ID
+    """
+    input_path = INPUT_DIR / file_id
+    output_path = OUTPUT_DIR / file_id
+    selected_items = json.loads(selectedItemIds)
+
+    if not file_id.lower().endswith(".zip"):
+        # print(f"ERROR:     Only .zip files are allowed")
         raise HTTPException(status_code=400, detail="Only .zip files are allowed")
 
-    selected_items = []
-    if selectedItemIds:
-        selected_items = json.loads(selectedItemIds)
-
     if not selected_items:
-        raise HTTPException(status_code=400, detail="No items were selected.")
+        # print(f"ERROR:     No items were selected")
+        raise HTTPException(status_code=400, detail="No items were selected")
+
+    if not input_path.exists():
+        # print(f"ERROR:     Uploaded file no longer exists")
+        raise HTTPException(status_code=404, detail="Uploaded file no longer exists")
 
     try:
-        upload_id = str(uuid.uuid4())
-        output_path = PROCESSED_DIR / f"{upload_id}_{file.filename}"
-
-        uploaded_file_path = UPLOAD_DIR / f"{upload_id}_{file.filename}"
-        with open(uploaded_file_path, "wb") as buffer:
-            shutil.copyfileobj(file.file, buffer)
-
-        process_zip_file(uploaded_file_path, output_path, selected_items)
+        process_zip_file(input_path, output_path, selected_items)
 
         return JSONResponse(
             status_code=200,
             content={
                 "status": "success",
                 "message": "File processed successfully. Click to download.",
-                "processedFileId": output_path.name,
             },
         )
 
     except Exception as e:
-        print(f"Error processing file: {str(e)}")
+        print(f"ERROR:     {str(e)}")
         raise HTTPException(
             status_code=500, detail="Error processing file: 500 Internal Server Error"
         )
@@ -107,7 +123,7 @@ async def download_processed_file(file_id: str):
     Returns:
         The processed zip file as a download
     """
-    file_path = Path("processed") / file_id
+    file_path = OUTPUT_DIR / file_id
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Processed file no longer exists")
@@ -127,7 +143,7 @@ async def example_zip():
 
 
 @app.post("/chat")
-async def process_chat(data: ChatRequest):
+async def process_chat(prompt: str = Form(...)):
     """
     Endpoint to process chat messages and return selected items.
 
@@ -138,16 +154,13 @@ async def process_chat(data: ChatRequest):
         JSON response with message and selected items
     """
     try:
-        # Process the message (in a real application, this might involve NLP or other processing)
-        message = data.message.lower()
-
         # Simple keyword-based logic to determine which items to select
-        selectedItemIds = generate_keywords(message)
+        selectedItemIds = generate_keywords(prompt)
 
         return JSONResponse(
             status_code=200,
             content={
-                "message": f"Processed message: '{data.message}'",
+                "message": "Processed prompt",
                 "selectedItemIds": selectedItemIds,
             },
         )
@@ -160,29 +173,38 @@ async def process_chat(data: ChatRequest):
 
 
 @app.post("/redact")
-async def redact_handler(prompt: str = Form(...), file: UploadFile = File(...)):
-    upload_id = str(uuid.uuid4())
-    uploaded_file_path = UPLOAD_DIR / f"{upload_id}_{file.filename}"
-    output_path = PROCESSED_DIR / f"{upload_id}_{file.filename}"
+async def redact_handler(file_id: str = Form(...), prompt: str = Form(...)):
+    input_path = INPUT_DIR / file_id
+    output_path = OUTPUT_DIR / file_id
 
-    # Save uploaded file
-    with open(uploaded_file_path, "wb") as f:
-        f.write(await file.read())
+    if not prompt:
+        # print(f"ERROR:     Please enter a prompt")
+        raise HTTPException(status_code=400, detail="Please enter a prompt")
 
-    # Get words to redact
-    redactions = get_redactions(prompt, uploaded_file_path)
+    if not input_path.exists():
+        # print(f"ERROR:     Uploaded file no longer exists")
+        raise HTTPException(status_code=404, detail="Uploaded file no longer exists")
 
-    # Apply redactions
-    redact_pdf(uploaded_file_path, output_path, redactions)
+    try:
+        # Get words to redact
+        redactions = get_redactions(prompt, input_path)
 
-    return JSONResponse(
-        status_code=200,
-        content={
-            "status": "success",
-            "message": "File processed successfully. Click to download.",
-            "processedFileId": output_path.name,
-        },
-    )
+        # Apply redactions
+        redact_pdf(input_path, output_path, redactions)
+
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": "File processed successfully. Click to download.",
+            },
+        )
+
+    except Exception as e:
+        print(f"ERROR:     {str(e)}")
+        raise HTTPException(
+            status_code=500, detail="Error processing file: 500 Internal Server Error"
+        )
 
 
 # Run the app with uvicorn

@@ -54,12 +54,13 @@ document.addEventListener("DOMContentLoaded", () => {
     root = "";
   }
 
+  const blurEndpoint = `${root}/blur`;
+  const chatEndpoint = `${root}/chat`;
   const uploadEndpoint = `${root}/upload`;
   const redactEndpoint = `${root}/redact`;
   const downloadEndpoint = `${root}/download`;
   const sampleZipEndpoint = `${root}/sample-zip`;
   const samplePdfEndpoint = `${root}/sample-pdf`;
-  const chatEndpoint = `${root}/chat`;
 
   // Multiselect elements
   const multiselectBtn = document.getElementById("multiselect-btn");
@@ -426,6 +427,23 @@ document.addEventListener("DOMContentLoaded", () => {
     pdfSubmitStatus.classList.add("hidden");
   }
 
+  async function uploadFile(file) {
+    const formData = new FormData();
+    formData.append("file", file);
+    const response = await fetch(uploadEndpoint, {
+      method: "POST",
+      body: formData,
+    });
+
+    if (response.ok) {
+      const data = await response.json();
+      return data.fileId;
+    } else {
+      const data = await response.json();
+      throw new Error(`Upload failed: ${data.detail}`);
+    }
+  }
+
   async function handleZipSubmit() {
     if (!selectedFile) return;
 
@@ -459,6 +477,9 @@ document.addEventListener("DOMContentLoaded", () => {
         if (chatResponse.ok) {
           const chatData = await chatResponse.json();
 
+          // Update message
+          submitStatus.textContent = chatData.message;
+
           // Update selected items if provided
           if (
             chatData.selectedItemIds &&
@@ -471,21 +492,28 @@ document.addEventListener("DOMContentLoaded", () => {
         }
       }
 
-      // Step 2: File upload processing
+      // Step 2: Upload file
+      submitBtn.textContent = "Uploading...";
+      submitBtn.disabled = true;
+      submitLoader.style.display = "block";
+
+      const fileId = await uploadFile(selectedFile);
+
+      // Step 3: File upload processing
       submitBtn.textContent = "Processing...";
 
       const formData = new FormData();
-      formData.append("file", selectedFile);
+      formData.append("file_id", fileId);
       formData.append("selectedItemIds", JSON.stringify(selectedItemIds));
 
-      const uploadResponse = await fetch(uploadEndpoint, {
+      const response = await fetch(blurEndpoint, {
         method: "POST",
         body: formData,
       });
 
-      if (uploadResponse.ok) {
-        const uploadData = await uploadResponse.json();
-        processedFileId = uploadData.processedFileId;
+      if (response.ok) {
+        const data = await response.json();
+        processedFileId = fileId;
 
         // Success state
         submitBtn.textContent = "Download";
@@ -493,13 +521,12 @@ document.addEventListener("DOMContentLoaded", () => {
         submitBtn.disabled = false;
         submitLoader.style.display = "none";
 
-        submitStatus.textContent =
-          uploadData.message || "File processed successfully";
+        submitStatus.textContent = data.message;
+        submitStatus.style.color = "var(--success-color)"; // ✅ reset color
         submitStatus.classList.remove("hidden");
-
-        // Remove this line: submitBtn.onclick = () => initiateDownload(processedFileId)
       } else {
-        throw new Error("Upload failed");
+        const data = await response.json();
+        throw new Error(`Processing failed: ${data.detail}`);
       }
     } catch (error) {
       submitBtn.textContent = "Submit";
@@ -522,17 +549,19 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     try {
-      // PDF processing
-      pdfSubmitBtn.textContent = "Processing...";
+      // Step 1: Upload file
+      pdfSubmitBtn.textContent = "Uploading...";
       pdfSubmitBtn.disabled = true;
       pdfSubmitLoader.style.display = "block";
 
+      const fileId = await uploadFile(selectedFile);
+
+      // Step 2: PDF processing
+      pdfSubmitBtn.textContent = "Processing...";
+
       const formData = new FormData();
-      formData.append("file", selectedFile);
-      formData.append(
-        "prompt",
-        pdfChatInput.value.trim() || "Redact sensitive information"
-      );
+      formData.append("file_id", fileId);
+      formData.append("prompt", pdfChatInput.value.trim());
 
       const response = await fetch(redactEndpoint, {
         method: "POST",
@@ -541,7 +570,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
       if (response.ok) {
         const data = await response.json();
-        processedFileId = data.processedFileId;
+        // Set file id to download
+        processedFileId = fileId;
 
         // Success state
         pdfSubmitBtn.textContent = "Download";
@@ -551,11 +581,11 @@ document.addEventListener("DOMContentLoaded", () => {
 
         pdfSubmitStatus.textContent =
           data.message || "File processed successfully";
+        pdfSubmitStatus.style.color = "var(--success-color)"; // ✅ reset color
         pdfSubmitStatus.classList.remove("hidden");
-
-        // Remove this line: pdfSubmitBtn.onclick = () => initiateDownload(processedFileId)
       } else {
-        throw new Error("Processing failed");
+        const data = await response.json();
+        throw new Error(`Processing failed: ${data.detail}`);
       }
     } catch (error) {
       pdfSubmitBtn.textContent = "Submit";
