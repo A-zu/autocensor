@@ -1,5 +1,5 @@
 import fitz  # PyMuPDF
-import re
+
 
 def redact_pdf(input_path: str, output_path: str, redactions: set[str]):
     doc = fitz.open(input_path)

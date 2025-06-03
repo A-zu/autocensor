@@ -5,6 +5,7 @@ from pathlib import Path
 
 from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
+from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from chat import generate_keywords, get_redactions
@@ -20,6 +21,8 @@ PROCESSED_DIR.mkdir(exist_ok=True)
 
 processed_files = {}
 
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
 
 class ChatRequest(BaseModel):
     message: str
@@ -33,7 +36,6 @@ async def removeProxyPath(request: Request, call_next):
     return response
 
 
-@app.get("")
 @app.get("/")
 async def home():
     return FileResponse("static/index.html")
@@ -47,7 +49,7 @@ async def exception_404(request, __):
 
 @app.post("/upload")
 async def upload_zip_file(
-    zipFile: UploadFile = File(...), selectedItemIds: str = Form(None)
+    file: UploadFile = File(...), selectedItemIds: str = Form(None)
 ):
     """
     Endpoint to handle ZIP file uploads and processing.
@@ -58,7 +60,7 @@ async def upload_zip_file(
     Returns:
         JSON response with status, message, and processed file ID
     """
-    if not zipFile.filename.lower().endswith(".zip"):
+    if not file.filename.lower().endswith(".zip"):
         raise HTTPException(status_code=400, detail="Only .zip files are allowed")
 
     selected_items = []
@@ -72,9 +74,9 @@ async def upload_zip_file(
         upload_id = str(uuid.uuid4())
         processed_id = str(uuid.uuid4())
 
-        uploaded_file_path = UPLOAD_DIR / f"{upload_id}_{zipFile.filename}"
+        uploaded_file_path = UPLOAD_DIR / f"{upload_id}_{file.filename}"
         with open(uploaded_file_path, "wb") as buffer:
-            shutil.copyfileobj(zipFile.file, buffer)
+            shutil.copyfileobj(file.file, buffer)
 
         processed_file_path = process_zip_file(
             uploaded_file_path, processed_id, PROCESSED_DIR, selected_items
@@ -164,6 +166,7 @@ async def process_chat(data: ChatRequest):
             status_code=500, detail=f"Error processing chat message: {str(e)}"
         )
 
+
 @app.post("/redact")
 async def redact_handler(prompt: str = Form(...), file: UploadFile = File(...)):
     upload_id = str(uuid.uuid4())
@@ -180,7 +183,10 @@ async def redact_handler(prompt: str = Form(...), file: UploadFile = File(...)):
     # Apply redactions
     redact_pdf(uploaded_file_path, output_path, redactions)
 
-    return FileResponse(output_path, filename="redacted.pdf", media_type="application/pdf")
+    return FileResponse(
+        output_path, filename="redacted.pdf", media_type="application/pdf"
+    )
+
 
 # Run the app with uvicorn
 if __name__ == "__main__":
