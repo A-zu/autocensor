@@ -101,7 +101,7 @@ async def upload_zip_file(file_id: str = Form(None), selectedItemIds: str = Form
             status_code=200,
             content={
                 "status": "success",
-                "message": "File processed successfully. Click to download.",
+                "message": "File processed successfully",
             },
         )
 
@@ -196,7 +196,7 @@ async def redact_handler(file_id: str = Form(...), prompt: str = Form(...)):
             status_code=200,
             content={
                 "status": "success",
-                "message": "File processed successfully. Click to download.",
+                "message": "File processed successfully",
             },
         )
 
