@@ -447,6 +447,8 @@ document.addEventListener("DOMContentLoaded", () => {
   async function handleZipSubmit() {
     if (!selectedFile) return;
 
+    submitStatus.classList.add("hidden");
+
     // Disable file changes
     dropArea.style.pointerEvents = "none";
     browseBtn.disabled = true;
@@ -541,6 +543,8 @@ document.addEventListener("DOMContentLoaded", () => {
 
   async function handlePdfSubmit() {
     if (!selectedFile) return;
+
+    pdfSubmitStatus.classList.add("hidden");
 
     // If button is in download state, trigger download
     if (pdfSubmitBtn.classList.contains("success")) {
