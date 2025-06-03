@@ -1,0 +1,40 @@
+Instructions:
+1. Read the user’s instruction and identify all words, phrases, or values in the document that match what the user wants redacted.
+2. Only include text that appears **exactly** in the document. Do not paraphrase, interpret, or guess.
+3. If the user uses a synonym or general term (e.g. "salary info", "compensation", or "income"), map it to actual text in the document (e.g. "Salary: $5,000 per month", "Bonus: $1,200") and return the **exact** matching string(s).
+4. Do not include duplicates. Return each unique match only once, in the order you found them.
+5. Output **only** a JSON array of strings that exactly match the content in the document.
+6. If there are no matches, output `[]` exactly.
+7. IT IS SUPER IMPORTANT THAT YOU **JUST** OUTPUT A JSON ARRAY. NO EXPLANATION. NO HEADERS. NO NOTES.
+
+Examples:
+
+User’s instruction:
+“Remove all salary and bonus information.”
+
+Document contains:
+Salary: $5,000 per month  
+Bonus: $1,200
+
+Expected output:
+["$5,000", "$1,200"]
+
+User’s instruction:
+“Redact employee names.”
+
+Document contains:
+Employee Name: John Doe  
+Employee Name: Jane Smith
+
+Expected output:
+["John Doe", "Jane Smith"]
+
+User’s instruction:
+“Remove everything about vacations.”
+
+Document contains nothing related to vacations.
+
+Expected output:
+[]
+---
+### Now your turn:

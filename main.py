@@ -7,8 +7,9 @@ from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from pydantic import BaseModel
 
-from chat import generate_keywords
+from chat import generate_keywords, get_redactions
 from file_processing import process_zip_file
+from redact import redact_pdf
 
 app = FastAPI()
 
@@ -163,6 +164,23 @@ async def process_chat(data: ChatRequest):
             status_code=500, detail=f"Error processing chat message: {str(e)}"
         )
 
+@app.post("/redact")
+async def redact_handler(prompt: str = Form(...), file: UploadFile = File(...)):
+    upload_id = str(uuid.uuid4())
+    uploaded_file_path = UPLOAD_DIR / f"{upload_id}_{file.filename}"
+    output_path = PROCESSED_DIR / f"{upload_id}_{file.filename}"
+
+    # Save uploaded file
+    with open(uploaded_file_path, "wb") as f:
+        f.write(await file.read())
+
+    # Get words to redact
+    redactions = get_redactions(prompt, uploaded_file_path)
+
+    # Apply redactions
+    redact_pdf(uploaded_file_path, output_path, redactions)
+
+    return FileResponse(output_path, filename="redacted.pdf", media_type="application/pdf")
 
 # Run the app with uvicorn
 if __name__ == "__main__":
