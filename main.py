@@ -135,10 +135,17 @@ async def download_processed_file(file_id: str):
     )
 
 
-@app.get("/example-zip")
-async def example_zip():
+@app.get("/sample-zip")
+async def sample_zip():
     return FileResponse(
-        path="static/example.zip", filename="example.zip", media_type="application/zip"
+        path="static/sample.zip", filename="sample.zip", media_type="application/zip"
+    )
+
+
+@app.get("/sample-pdf")
+async def sample_pdf():
+    return FileResponse(
+        path="static/sample.pdf", filename="sample.pdf", media_type="application/pdf"
     )
 
 

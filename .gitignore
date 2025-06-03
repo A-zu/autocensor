@@ -15,4 +15,6 @@ datasets
 # resources
 *.pt
 *.zip
+!sample.zip
 *.pdf
+!sample.pdf
