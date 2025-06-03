@@ -2,7 +2,15 @@ import json
 import uuid
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 
@@ -68,7 +76,7 @@ async def upload_file(file: UploadFile = File(...)):
 
 
 @app.get("/download/{file_id}")
-async def download_file(file_id: str):
+async def download_file(background_tasks: BackgroundTasks, file_id: str):
     """
     Endpoint to download a processed  file.
 
@@ -82,6 +90,8 @@ async def download_file(file_id: str):
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Processed file no longer exists")
+
+    background_tasks.add_task(lambda: file_path.unlink())
 
     return FileResponse(
         path=file_path,
@@ -120,7 +130,11 @@ async def process_chat(prompt: str = Form(...)):
 
 
 @app.post("/blur")
-async def blur_handler(file_id: str = Form(None), selectedItemIds: str = Form(None)):
+async def blur_handler(
+    background_tasks: BackgroundTasks,
+    file_id: str = Form(None),
+    selectedItemIds: str = Form(None),
+):
     """
     Endpoint to handle image processing.
 
@@ -149,6 +163,8 @@ async def blur_handler(file_id: str = Form(None), selectedItemIds: str = Form(No
     try:
         process_zip_file(input_path, output_path, selected_items)
 
+        background_tasks.add_task(lambda: input_path.unlink())
+
         return JSONResponse(
             status_code=200,
             content={
@@ -165,7 +181,9 @@ async def blur_handler(file_id: str = Form(None), selectedItemIds: str = Form(No
 
 
 @app.post("/redact")
-async def redact_handler(file_id: str = Form(...), prompt: str = Form(...)):
+async def redact_handler(
+    background_tasks: BackgroundTasks, file_id: str = Form(...), prompt: str = Form(...)
+):
     """
     Endpoint to handle PDF redaction.
 
@@ -191,6 +209,8 @@ async def redact_handler(file_id: str = Form(...), prompt: str = Form(...)):
         redactions = get_redactions(prompt, input_path)
 
         redact_pdf(input_path, output_path, redactions)
+
+        background_tasks.add_task(lambda: input_path.unlink())
 
         return JSONResponse(
             status_code=200,
