@@ -19,7 +19,7 @@ def clean_output(response):
 
 
 def generate_keywords(
-    user_input: str, model: str = "qwen3:4b", prompt_file: str = "prompt.txt"
+    user_input: str, model: str = "qwen3:4b", prompt_file: str = "blur_prompt.txt"
 ) -> List[int]:
     system_prompt = Path(prompt_file).read_text(encoding="utf-8")
     full_prompt = (
