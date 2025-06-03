@@ -72,25 +72,20 @@ async def upload_zip_file(
 
     try:
         upload_id = str(uuid.uuid4())
-        processed_id = str(uuid.uuid4())
+        output_path = PROCESSED_DIR / f"{upload_id}_{file.filename}"
 
         uploaded_file_path = UPLOAD_DIR / f"{upload_id}_{file.filename}"
         with open(uploaded_file_path, "wb") as buffer:
             shutil.copyfileobj(file.file, buffer)
 
-        processed_file_path = process_zip_file(
-            uploaded_file_path, processed_id, PROCESSED_DIR, selected_items
-        )
-
-        # Store the mapping of ID to processed file path
-        processed_files[processed_id] = processed_file_path
+        process_zip_file(uploaded_file_path, output_path, selected_items)
 
         return JSONResponse(
             status_code=200,
             content={
                 "status": "success",
                 "message": "File processed successfully. Click to download.",
-                "processedFileId": processed_id,
+                "processedFileId": output_path.name,
             },
         )
 
@@ -112,17 +107,14 @@ async def download_processed_file(file_id: str):
     Returns:
         The processed zip file as a download
     """
-    if file_id not in processed_files:
-        raise HTTPException(status_code=404, detail="Processed file not found")
-
-    file_path = processed_files[file_id]
+    file_path = Path("processed") / file_id
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Processed file no longer exists")
 
     return FileResponse(
         path=file_path,
-        filename=file_path.name.split("_", 2)[2],  # Remove the "processed_UUID_" prefix
+        filename=file_path.name[37:],  # UUID's are 36 characters long (plus "_")
         media_type="application/zip",
     )
 
@@ -183,8 +175,13 @@ async def redact_handler(prompt: str = Form(...), file: UploadFile = File(...)):
     # Apply redactions
     redact_pdf(uploaded_file_path, output_path, redactions)
 
-    return FileResponse(
-        output_path, filename="redacted.pdf", media_type="application/pdf"
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "message": "File processed successfully. Click to download.",
+            "processedFileId": output_path.name,
+        },
     )
 
 
