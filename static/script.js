@@ -1,6 +1,5 @@
 document.addEventListener("DOMContentLoaded", () => {
   // Elements
-  const loader = document.getElementById("loader");
   const dropArea = document.getElementById("drop-area");
   const fileInfo = document.getElementById("file-info");
   const fileName = document.getElementById("file-name");
@@ -430,6 +429,7 @@ document.addEventListener("DOMContentLoaded", () => {
   async function uploadFile(file) {
     const formData = new FormData();
     formData.append("file", file);
+
     const response = await fetch(uploadEndpoint, {
       method: "POST",
       body: formData,
@@ -468,12 +468,12 @@ document.addEventListener("DOMContentLoaded", () => {
       const chatMessage = chatInput.value.trim();
 
       if (chatMessage) {
+        const formData = new FormData();
+        formData.append("prompt", chatMessage);
+
         const chatResponse = await fetch(chatEndpoint, {
           method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ message: chatMessage }),
+          body: formData,
         });
 
         if (chatResponse.ok) {
@@ -538,6 +538,10 @@ document.addEventListener("DOMContentLoaded", () => {
       submitStatus.textContent = error.message;
       submitStatus.style.color = "var(--error-color)";
       submitStatus.classList.remove("hidden");
+    } finally {
+      // Re-enable file changes
+      dropArea.style.pointerEvents = "auto";
+      browseBtn.disabled = false;
     }
   }
 
@@ -545,6 +549,10 @@ document.addEventListener("DOMContentLoaded", () => {
     if (!selectedFile) return;
 
     pdfSubmitStatus.classList.add("hidden");
+
+    // Disable file changes
+    dropArea.style.pointerEvents = "none";
+    browseBtn.disabled = true;
 
     // If button is in download state, trigger download
     if (pdfSubmitBtn.classList.contains("success")) {
@@ -599,6 +607,10 @@ document.addEventListener("DOMContentLoaded", () => {
       pdfSubmitStatus.textContent = error.message;
       pdfSubmitStatus.style.color = "var(--error-color)";
       pdfSubmitStatus.classList.remove("hidden");
+    } finally {
+      // Re-enable file changes
+      dropArea.style.pointerEvents = "auto";
+      browseBtn.disabled = false;
     }
   }
 
