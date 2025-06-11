@@ -19,7 +19,7 @@ def clean_output(response):
 
 
 def generate_keywords(
-    user_input: str, model: str = "qwen3:4b", prompt_file: str = "blur_prompt.txt"
+    user_input: str, model: str, prompt_file: str = "blur_prompt.txt"
 ) -> List[int]:
     system_prompt = Path(prompt_file).read_text(encoding="utf-8")
     full_prompt = (
@@ -70,7 +70,7 @@ def chunk_text(text: str, max_tokens: int) -> list[str]:
 def get_redactions(
     user_prompt: str,
     pdf_path: str,
-    model: str = "qwen3:4b",
+    model: str,
     prompt_file: str = "redact_prompt.txt",
 ) -> set[str]:
     # 1. Extract text from PDF

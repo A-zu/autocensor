@@ -1,3 +1,4 @@
+import os
 import json
 import uuid
 from pathlib import Path
@@ -17,6 +18,10 @@ from fastapi.staticfiles import StaticFiles
 from chat import generate_keywords, get_redactions
 from file_processing import process_zip_file
 from redact import redact_pdf
+
+HOST = os.environ["HOST"]
+PORT = os.environ["PORT"]
+OLLAMA_MODEL = os.environ["OLLAMA_MODEL"]
 
 app = FastAPI()
 
@@ -112,7 +117,7 @@ async def process_chat(prompt: str = Form(...)):
         JSON response with message and selected items
     """
     try:
-        selectedItemIds = generate_keywords(prompt)
+        selectedItemIds = generate_keywords(prompt, OLLAMA_MODEL)
 
         return JSONResponse(
             status_code=200,
@@ -206,7 +211,7 @@ async def redact_handler(
         raise HTTPException(status_code=404, detail="Uploaded file no longer exists")
 
     try:
-        redactions = get_redactions(prompt, input_path)
+        redactions = get_redactions(prompt, input_path, OLLAMA_MODEL)
 
         redact_pdf(input_path, output_path, redactions)
 
@@ -261,7 +266,7 @@ if __name__ == "__main__":
 
         print("INFO:     Starting Ollama model download...")
         try:
-            ollama.pull("qwen3:4b")
+            ollama.pull(OLLAMA_MODEL)
             print("INFO:     Model download complete.")
         except Exception as e:
             print(f"ERROR:     Failed to download model: {e}")
@@ -269,4 +274,4 @@ if __name__ == "__main__":
     download_thread = threading.Thread(target=download_dependencies)
     download_thread.start()
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=False)
+    uvicorn.run("main:app", host=HOST, port=PORT, reload=False)
