@@ -274,4 +274,4 @@ if __name__ == "__main__":
     download_thread = threading.Thread(target=download_dependencies)
     download_thread.start()
 
-    uvicorn.run("main:app", host=HOST, port=PORT, reload=False)
+    uvicorn.run("main:app", host=HOST, port=int(PORT), reload=False)
