@@ -1,9 +1,12 @@
 import json
+import logging
 from pathlib import Path
 from typing import List
 
 import fitz
 import ollama
+
+logger = logging.getLogger(__name__)
 
 
 def clean_output(response):
@@ -98,15 +101,15 @@ def get_redactions(
 
     # 4. Generate per chunk
     for i, chunk in enumerate(chunks):
-        full_prompt = f"""{system_prompt.strip()}
+        full_prompt = (
+            f"{system_prompt.strip()}\n"
+            "Document Content:\n"
+            f"{chunk}\n"
+            "User Instruction:\n"
+            f"{user_prompt.strip()}\n"
+        )
 
-User instruction:
-{user_prompt.strip()}
-
-Document content:
-{chunk}
-"""
-
+        logger.info(f"User instruction: {user_prompt.strip()}")
         response = ollama.generate(
             model=model, prompt=full_prompt, stream=False, keep_alive="15m"
         )

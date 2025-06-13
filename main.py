@@ -2,6 +2,7 @@ import os
 import json
 import uuid
 from pathlib import Path
+import logging.config
 
 from fastapi import (
     BackgroundTasks,
@@ -19,9 +20,11 @@ from chat import generate_keywords, get_redactions
 from file_processing import process_zip_file
 from redact import redact_pdf
 
-HOST = os.environ["HOST"]
-PORT = os.environ["PORT"]
-OLLAMA_MODEL = os.environ["OLLAMA_MODEL"]
+logger = logging.getLogger(__name__)
+
+HOST = os.getenv("HOST") or "0.0.0.0"
+PORT = os.getenv("PORT") or 8000
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL") or "qwen3:4b"
 
 app = FastAPI()
 
@@ -128,7 +131,7 @@ async def process_chat(prompt: str = Form(...)):
         )
 
     except Exception as e:
-        print(f"ERROR:     {str(e)}")
+        logger.error(str(e))
         raise HTTPException(
             status_code=500, detail=f"Error processing chat message: {str(e)}"
         )
@@ -154,15 +157,15 @@ async def blur_handler(
     selected_items = json.loads(selectedItemIds)
 
     if not file_id.lower().endswith(".zip"):
-        # print(f"ERROR:     Only .zip files are allowed")
+        logger.error("Only .zip files are allowed")
         raise HTTPException(status_code=400, detail="Only .zip files are allowed")
 
     if not selected_items:
-        # print(f"ERROR:     No items were selected")
+        logger.error("No items were selected")
         raise HTTPException(status_code=400, detail="No items were selected")
 
     if not input_path.exists():
-        # print(f"ERROR:     Uploaded file no longer exists")
+        logger.error("Uploaded file no longer exists")
         raise HTTPException(status_code=404, detail="Uploaded file no longer exists")
 
     try:
@@ -179,7 +182,7 @@ async def blur_handler(
         )
 
     except Exception as e:
-        print(f"ERROR:     {str(e)}")
+        logger.error(str(e))
         raise HTTPException(
             status_code=500, detail="Error processing file: 500 Internal Server Error"
         )
@@ -203,11 +206,11 @@ async def redact_handler(
     output_path = OUTPUT_DIR / file_id
 
     if not prompt:
-        # print(f"ERROR:     Please enter a prompt")
+        logger.error("Please enter a prompt")
         raise HTTPException(status_code=400, detail="Please enter a prompt")
 
     if not input_path.exists():
-        # print(f"ERROR:     Uploaded file no longer exists")
+        logger.error("Uploaded file no longer exists")
         raise HTTPException(status_code=404, detail="Uploaded file no longer exists")
 
     try:
@@ -226,7 +229,7 @@ async def redact_handler(
         )
 
     except Exception as e:
-        print(f"ERROR:     {str(e)}")
+        logger.error(str(e))
         raise HTTPException(
             status_code=500, detail="Error processing file: 500 Internal Server Error"
         )
@@ -250,28 +253,35 @@ async def sample_pdf():
 if __name__ == "__main__":
     import uvicorn
     import threading
+    from logging_config import LOGGING_CONFIG
 
-    def download_dependencies():
+    logging.config.dictConfig(LOGGING_CONFIG)
+
+    def startup():
         import ollama
-        import easyocr
+        from easyocr import Reader
         from ultralytics import YOLO
 
-        print("INFO:     Dowloading EasyOCR model...")
-        easyocr.Reader(["en", "no"], gpu=True)
-        print("INFO:     Model download complete.")
+        logger = logging.getLogger("startup")
 
-        print("INFO:     Dowloading YOLO model...")
+        logger.info("Downloading EasyOCR model...")
+        Reader(["en", "no"], gpu=True)
+        logger.info("EasyOCR model download complete.")
+
+        logger.info("Downloading YOLO model...")
         YOLO("yolo12x.pt")
-        print("INFO:     Model download complete.")
+        logger.info("YOLO model download complete.")
 
-        print("INFO:     Starting Ollama model download...")
+        logger.info("Starting Ollama model download...")
         try:
             ollama.pull(OLLAMA_MODEL)
-            print("INFO:     Model download complete.")
+            logger.info("Ollama model download complete.")
         except Exception as e:
-            print(f"ERROR:     Failed to download model: {e}")
+            logger.error(f"Failed to download Ollama model: {e}")
 
-    download_thread = threading.Thread(target=download_dependencies)
+    download_thread = threading.Thread(target=startup)
     download_thread.start()
 
-    uvicorn.run("main:app", host=HOST, port=int(PORT), reload=False)
+    uvicorn.run(
+        "main:app", host=HOST, port=int(PORT), reload=False, log_config=LOGGING_CONFIG
+    )
