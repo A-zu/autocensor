@@ -1,6 +1,7 @@
 import json
 import logging
 from pathlib import Path
+import time
 from typing import List
 
 import fitz
@@ -70,6 +71,33 @@ def chunk_text(text: str, max_tokens: int) -> list[str]:
     return chunks
 
 
+def generate_with_throttle(model: str, prompt: str):
+    full_response = ""
+    buffer = ""
+    last_log_time = time.time()
+
+    stream = ollama.generate(
+        model=model,
+        prompt=prompt,
+        stream=True,
+    )
+
+    for chunk in stream:
+        text = chunk.get("response")
+        buffer += text
+        full_response += text
+
+        now = time.time()
+        if now - last_log_time >= 5:
+            logger.debug(
+                f"Partial response chunk:\n{buffer}",
+            )
+            buffer = ""
+            last_log_time = now
+
+    return {"response": full_response}
+
+
 def get_redactions(
     user_prompt: str,
     pdf_path: str,
@@ -110,11 +138,11 @@ def get_redactions(
         )
 
         logger.info(f"User instruction: {user_prompt.strip()}")
-        response = ollama.generate(
-            model=model, prompt=full_prompt, stream=False, keep_alive="15m"
-        )
+        response = generate_with_throttle(model, full_prompt)
 
         output = clean_output(response)
+        logger.debug(f"Model output: {output.strip()}")
+
         result = json.loads(output)
         if not isinstance(result, list):
             raise ValueError("Response was not a list")
