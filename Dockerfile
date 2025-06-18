@@ -17,8 +17,10 @@ COPY main.py .
 COPY chat.py .
 COPY redact.py .
 COPY blur_prompt.txt .
+COPY logging_config.py .
 COPY redact_prompt.txt .
 COPY blur_masked_images.py .
+COPY colorlog_formatter.py .
 COPY static/ static/
 
 # === Final Runtime Stage ===
