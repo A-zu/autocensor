@@ -30,10 +30,10 @@ document.addEventListener("DOMContentLoaded", () => {
   let processedFileId = null;
 
   // —— Endpoints ——
-  const root =
-    window.location.pathname === "/"
-      ? ""
-      : window.location.pathname.replace(/\/$/, "");
+  let root = window.location.href;
+  if (window.location.pathname === "/") {
+    root = "";
+  }
   const uploadEndpoint = `${root}/upload`;
   const blurEndpoint = `${root}/blur`;
   const redactEndpoint = `${root}/redact`;
