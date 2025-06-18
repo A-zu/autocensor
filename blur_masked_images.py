@@ -180,8 +180,19 @@ def process_directory(
         output_dir: root folder to write processed images to.
         verbose: passed to model.predict.
     """
+    logger.info(f"Processing directory: {input_dir=}")
+
+    start_time = time.perf_counter()
     videos = defaultdict(list)
     results = model.predict(input_dir, verbose=verbose)
+
+    prediction_time = time.perf_counter() - start_time
+    avg_time = prediction_time / len(results) if len(results) else 0.0
+    logger.info(f"Predicted {len(results)} frames in {prediction_time:.2f} seconds.")
+    logger.info(
+        f"Average prediction time per item: {avg_time:.4f} seconds. ({1 / avg_time:.2f} fps)"
+    )
+
     for result in results:
         processed = blur_items(result, coefficient=blur_intensity)
         orig = Path(result.path)
@@ -195,9 +206,11 @@ def process_directory(
 
         # save as JPEG at quality=90
         cv2.imwrite(str(dest), processed, [cv2.IMWRITE_JPEG_QUALITY, 90])
+        logger.debug(f"Saved image: {dest=}")
 
     for video_path, frames in videos.items():
         if not frames:
+            logger.warning(f"No frames to write for video: {video_path=}")
             continue
 
         rel = video_path.relative_to(input_dir)
@@ -209,12 +222,23 @@ def process_directory(
 
         if not fps or fps < 1:
             fps = 30.0
+            logger.warning(f"Invalid FPS from {video_path=}, defaulting to 30.0")
 
         h, w = frames[0].shape[:2]
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         with VideoWriterContext(dest, fourcc, fps, (w, h)) as writer:
             for frame in frames:
                 writer.write(frame)
+
+            logger.debug(f"Saved video: {dest} ({len(frames)} frames @ {fps:.2f} FPS)")
+
+    total_time = time.perf_counter() - start_time
+    avg_time = total_time / len(results) if len(results) else 0.0
+
+    logger.info(f"Processed {len(results)} frames in {total_time:.2f} seconds.")
+    logger.info(
+        f"Average processing time per item: {avg_time:.4f} seconds. ({1 / avg_time:.2f} fps)"
+    )
 
 
 def process_images(
