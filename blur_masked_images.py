@@ -164,7 +164,7 @@ def process_images(
     output_dir: Path,
     selected_items: List[str],
     blur_intensity: float,
-    model_name: str = "yoloe-v8l-seg.pt",
+    model_name: str,
 ) -> None:
     """
     Top-level image processing: sets up the YOLOE model and

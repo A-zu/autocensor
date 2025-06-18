@@ -36,6 +36,5 @@ LOGGING_CONFIG = {
         "uvicorn.error": {"propagate": True},
         "uvicorn.access": {"propagate": True},
         "ultralytics": {"propagate": True},
-        "easyocr": {"propagate": True},
     },
 }

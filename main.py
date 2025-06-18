@@ -23,6 +23,7 @@ logger = logging.getLogger(__name__)
 HOST = os.getenv("HOST") or "0.0.0.0"
 PORT = os.getenv("PORT") or 8000
 OLLAMA_MODEL = os.getenv("OLLAMA_MODEL") or "qwen3:4b"
+YOLOE_MODEL = os.getenv("YOLOE_MODEL") or "yoloe-v8l-seg.pt"
 
 app = FastAPI()
 
@@ -257,17 +258,12 @@ if __name__ == "__main__":
 
     def startup():
         import ollama
-        from easyocr import Reader
-        from ultralytics import YOLO
+        from ultralytics import YOLOE
 
         logger = logging.getLogger("startup")
 
-        logger.info("Downloading EasyOCR model...")
-        Reader(["en", "no"], gpu=True)
-        logger.info("EasyOCR model download complete.")
-
         logger.info("Downloading YOLO model...")
-        YOLO("yolo12x.pt")
+        YOLOE(YOLOE_MODEL)
         logger.info("YOLO model download complete.")
 
         logger.info("Starting Ollama model download...")
