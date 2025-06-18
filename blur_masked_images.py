@@ -1,3 +1,4 @@
+import os
 import time
 import logging
 import zipfile
@@ -14,6 +15,8 @@ from ultralytics.data.utils import VID_FORMATS
 from ultralytics.engine.results import Results
 
 logger = logging.getLogger(__name__)
+
+YOLO_BATCH_SIZE = os.getenv("YOLO_BATCH_SIZE") or 8
 
 
 class VideoWriterContext:
@@ -184,7 +187,7 @@ def process_directory(
 
     start_time = time.perf_counter()
     videos = defaultdict(list)
-    results = model.predict(input_dir, verbose=verbose)
+    results = model.predict(input_dir, verbose=verbose, batch=int(YOLO_BATCH_SIZE))
 
     prediction_time = time.perf_counter() - start_time
     avg_time = prediction_time / len(results) if len(results) else 0.0
@@ -226,6 +229,7 @@ def process_directory(
 
         h, w = frames[0].shape[:2]
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+
         with VideoWriterContext(dest, fourcc, fps, (w, h)) as writer:
             for frame in frames:
                 writer.write(frame)
