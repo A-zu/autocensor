@@ -151,17 +151,11 @@ def blur_items(
 
     if result.masks:
         try:
-            # combine N×H×W → H×W mask
             combined_mask = torch.any(result.masks.data > 0.5, dim=0)
-            logger.debug(f"Combined mask shape: {combined_mask.shape}")
-
-            start = time.perf_counter()
             blur_mask(combined_mask, image, blurred_image)
-            duration = time.perf_counter() - start
 
-            logger.debug(f"Blurring took {duration:.3f}s — image shape: {image.shape}")
-        except Exception:
-            logger.exception("Error during mask processing and blurring.")
+        except Exception as e:
+            logger.exception(f"Error during mask processing and blurring. {str(e)}")
 
     return image
 
