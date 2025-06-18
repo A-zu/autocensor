@@ -168,7 +168,7 @@ async def blur_handler(
         raise HTTPException(status_code=404, detail="Uploaded file no longer exists")
 
     try:
-        process_zip_file(input_path, output_path, selected_items, intensity)
+        process_zip_file(input_path, output_path, selected_items, intensity, YOLOE_MODEL)
 
         background_tasks.add_task(lambda: input_path.unlink())
 

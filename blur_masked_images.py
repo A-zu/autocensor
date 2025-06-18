@@ -212,6 +212,7 @@ def process_zip_file(
     output_path: Path,
     selected_items: List[str],
     blur_intensity: float,
+    model_name: str,
 ) -> None:
     """
     Full end-to-end handler for a ZIP of images:
@@ -229,6 +230,6 @@ def process_zip_file(
         extract_zip(uploaded_file_path, orig)
 
         proc.mkdir()
-        process_images(orig, proc, selected_items, blur_intensity)
+        process_images(orig, proc, selected_items, blur_intensity, model_name)
 
         create_processed_zip(output_path, proc)
