@@ -4,14 +4,47 @@ import zipfile
 import tempfile
 from typing import List
 from pathlib import Path
+from collections import defaultdict
 
 import cv2
 import torch
 import numpy as np
 from ultralytics import YOLOE
+from ultralytics.data.utils import VID_FORMATS
 from ultralytics.engine.results import Results
 
 logger = logging.getLogger(__name__)
+
+
+class VideoWriterContext:
+    def __init__(self, path, fourcc, fps, size):
+        self.path = path
+        self.fourcc = fourcc
+        self.fps = fps
+        self.size = size
+        self.cap = None
+
+    def __enter__(self):
+        self.writer = cv2.VideoWriter(str(self.path), self.fourcc, self.fps, self.size)
+        return self.writer
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.writer is not None:
+            self.writer.release()
+
+
+class VideoCaptureContext:
+    def __init__(self, path):
+        self.path = path
+        self.cap = None
+
+    def __enter__(self):
+        self.cap = cv2.VideoCapture(str(self.path))
+        return self.cap
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        if self.cap is not None:
+            self.cap.release()
 
 
 def get_kernel(
@@ -147,16 +180,41 @@ def process_directory(
         output_dir: root folder to write processed images to.
         verbose: passed to model.predict.
     """
+    videos = defaultdict(list)
     results = model.predict(input_dir, verbose=verbose)
     for result in results:
         processed = blur_items(result, coefficient=blur_intensity)
         orig = Path(result.path)
+        if orig.suffix[1:].lower() in VID_FORMATS:
+            videos[orig].append(processed)
+            continue
+
         rel = orig.relative_to(input_dir)
         dest = output_dir / rel.with_suffix(".jpg")
         dest.parent.mkdir(parents=True, exist_ok=True)
 
         # save as JPEG at quality=90
         cv2.imwrite(str(dest), processed, [cv2.IMWRITE_JPEG_QUALITY, 90])
+
+    for video_path, frames in videos.items():
+        if not frames:
+            continue
+
+        rel = video_path.relative_to(input_dir)
+        dest = output_dir / rel.with_suffix(".mp4")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+
+        with VideoCaptureContext(video_path) as cap:
+            fps = cap.get(cv2.CAP_PROP_FPS)
+
+        if not fps or fps < 1:
+            fps = 30.0
+
+        h, w = frames[0].shape[:2]
+        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        with VideoWriterContext(dest, fourcc, fps, (w, h)) as writer:
+            for frame in frames:
+                writer.write(frame)
 
 
 def process_images(
