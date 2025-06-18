@@ -17,6 +17,7 @@ from fastapi.staticfiles import StaticFiles
 from chat import get_redactions
 from blur_masked_images import process_zip_file
 from redact import redact_pdf
+from ultralytics.data.utils import IMG_FORMATS, VID_FORMATS
 
 logger = logging.getLogger(__name__)
 
@@ -108,7 +109,6 @@ async def download_file(background_tasks: BackgroundTasks, file_id: str):
 
 @app.post("/blur")
 async def blur_handler(
-    background_tasks: BackgroundTasks,
     file_id: str = Form(None),
     prompt: str = Form(None),
     intensity: float = Form(None),
@@ -126,7 +126,8 @@ async def blur_handler(
     output_path = OUTPUT_DIR / file_id
     selected_items = [item.strip() for item in prompt.split(",") if item.strip()]
 
-    if not file_id.lower().endswith(".zip"):
+    suffix = Path(file_id).suffix[1:].lower()
+    if suffix not in {"zip"} | IMG_FORMATS | VID_FORMATS:
         logger.error("Only .zip files are allowed")
         raise HTTPException(status_code=400, detail="Only .zip files are allowed")
 
@@ -142,8 +143,6 @@ async def blur_handler(
         process_zip_file(
             input_path, output_path, selected_items, intensity, YOLOE_MODEL
         )
-
-        background_tasks.add_task(lambda: input_path.unlink())
 
         return JSONResponse(
             status_code=200,

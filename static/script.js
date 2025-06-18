@@ -24,6 +24,37 @@ document.addEventListener("DOMContentLoaded", () => {
   const samplePdfBtn = document.getElementById("sample-pdf-btn");
   const downloadFrame = document.getElementById("download-frame");
 
+  // —— Constants ——
+  const imgFormats = [
+    "bmp",
+    "dng",
+    "jpeg",
+    "jpg",
+    "mpo",
+    "png",
+    "tif",
+    "tiff",
+    "webp",
+    "pfm",
+    "heic",
+  ];
+  const vidFormats = [
+    "asf",
+    "avi",
+    "gif",
+    "m4v",
+    "mkv",
+    "mov",
+    "mp4",
+    "mpeg",
+    "mpg",
+    "ts",
+    "wmv",
+    "webm",
+  ];
+  const zipFormats = ["zip"];
+  const pdfFormats = ["pdf"];
+
   // —— State ——
   let selectedFile = null;
   let fileType = null; // "zip" or "pdf"
@@ -71,10 +102,23 @@ document.addEventListener("DOMContentLoaded", () => {
     downloadFrame.src = "";
   }
 
-  function setFileDisplay(file, type) {
+  function setFileDisplay(file, type, ext) {
     fileName.textContent = file.name;
-    fileIcon.innerHTML = type === "zip" ? ZIP_SVG : PDF_SVG;
-    fileTypeBadge.textContent = type.toUpperCase();
+    switch (type) {
+      case "pdf":
+        fileIcon.innerHTML = PDF_SVG;
+        break;
+      case "zip":
+        fileIcon.innerHTML = ZIP_SVG;
+        break;
+      case "img":
+        fileIcon.innerHTML = IMG_SVG;
+        break;
+      case "vid":
+        fileIcon.innerHTML = VID_SVG;
+        break;
+    }
+    fileTypeBadge.textContent = ext.toUpperCase();
     fileTypeBadge.className = `file-type-badge ${type}`;
     fileInfo.classList.remove("hidden");
   }
@@ -83,13 +127,13 @@ document.addEventListener("DOMContentLoaded", () => {
     instructionContent.classList.add("hidden");
     chatForm.classList.remove("hidden");
     submitBtn.disabled = false;
-    if (type === "zip") {
+    if (type === "pdf") {
+      formTitle.textContent = "Redaction instructions";
+      chatInput.placeholder = "Describe what to redact...";
+    } else {
       sliderContainer.classList.remove("hidden");
       formTitle.textContent = "Label items you want to blur";
       chatInput.placeholder = "Document, monitor, person";
-    } else {
-      formTitle.textContent = "Redaction instructions";
-      chatInput.placeholder = "Describe what to redact...";
     }
   }
 
@@ -125,14 +169,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const fd = new FormData();
       fd.append("file_id", fileId);
       fd.append("prompt", chatInput.value.trim());
-      if (fileType === "zip") {
+      if (fileType !== "pdf") {
         const intensityFloat = (
           parseInt(intensitySlider.value, 10) / 100
         ).toFixed(2);
         fd.append("intensity", intensityFloat);
       }
 
-      const endpoint = fileType === "zip" ? blurEndpoint : redactEndpoint;
+      const endpoint = fileType === "pdf" ? redactEndpoint : blurEndpoint;
       const resp = await fetch(endpoint, { method: "POST", body: fd });
       if (!resp.ok) {
         const err = await resp.json();
@@ -162,13 +206,25 @@ document.addEventListener("DOMContentLoaded", () => {
   function validateAndProcessFile(file) {
     resetUI();
     const name = file.name.toLowerCase();
-    if (name.endsWith(".zip") || name.endsWith(".pdf")) {
+    const ext = name.split(".").pop();
+
+    fileType = null;
+    if (pdfFormats.includes(ext)) {
+      fileType = "pdf";
+    } else if (zipFormats.includes(ext)) {
+      fileType = "zip";
+    } else if (imgFormats.includes(ext)) {
+      fileType = "img";
+    } else if (vidFormats.includes(ext)) {
+      fileType = "vid";
+    }
+
+    if (fileType) {
       selectedFile = file;
-      fileType = name.endsWith(".zip") ? "zip" : "pdf";
-      setFileDisplay(file, fileType);
-      showForm(fileType);
+      setFileDisplay(file, fileType, ext);
+      showForm(ext);
     } else {
-      errorMessage.textContent = "Please select a .zip or .pdf file";
+      errorMessage.textContent = "Unsupported file format.";
       errorMessage.classList.remove("hidden");
     }
   }
@@ -207,9 +263,9 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // —— Inline SVGs ——
   const ZIP_SVG = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" 
-         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" 
-         stroke-linecap="round" stroke-linejoin="round">
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" 
+        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" 
+        stroke-linecap="round" stroke-linejoin="round">
       <path d="M22 12v9a1 1 0 0 1-1 1H3a1 1 0 0 1-1-1v-9"/>
       <path d="M2 12V5a1 1 0 0 1 1-1h18a1 1 0 0 1 1 1v7"/>
       <path d="M12 12v9"/>
@@ -217,10 +273,25 @@ document.addEventListener("DOMContentLoaded", () => {
       <path d="m12 12 4-4"/>
     </svg>`;
   const PDF_SVG = `
-    <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" 
-         viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" 
-         stroke-linecap="round" stroke-linejoin="round">
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" 
+        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" 
+        stroke-linecap="round" stroke-linejoin="round">
       <path d="M14.5 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7.5L14.5 2z"/>
       <polyline points="14 2 14 8 20 8"/>
+    </svg>`;
+  const VID_SVG = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" 
+        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" 
+        stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="7" width="14" height="12" rx="2" ry="2"></rect>
+      <polygon points="17 11 22 8 22 18 17 15 17 11"></polygon>
+    </svg>`;
+  const IMG_SVG = `
+    <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" 
+        viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" 
+        stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+      <circle cx="8.5" cy="8.5" r="1.5"/>
+      <path d="M21 15l-5-5L5 21"/>
     </svg>`;
 });

@@ -166,7 +166,7 @@ def blur_items(
     return image
 
 
-def process_directory(
+def process_images(
     model: YOLOE,
     input_dir: Path,
     output_dir: Path,
@@ -245,7 +245,7 @@ def process_directory(
     )
 
 
-def process_images(
+def process_directory(
     input_dir: Path,
     output_dir: Path,
     selected_items: List[str],
@@ -254,7 +254,7 @@ def process_images(
 ) -> None:
     """
     Top-level image processing: sets up the YOLOE model and
-    calls `process_directory` for each subfolder.
+    calls `process_images` for each subfolder.
 
     Args:
         input_dir: folder with extracted images.
@@ -265,7 +265,7 @@ def process_images(
     classes = selected_items
     model.set_classes(classes, model.get_text_pe(classes))
 
-    process_directory(model, input_dir, output_dir, blur_intensity)
+    process_images(model, input_dir, output_dir, blur_intensity)
 
     for subdir in input_dir.rglob("*"):
         if not subdir.is_dir():
@@ -273,7 +273,7 @@ def process_images(
         rel = subdir.relative_to(input_dir)
         out = output_dir / rel
         out.mkdir(parents=True, exist_ok=True)
-        process_directory(model, subdir, out, blur_intensity)
+        process_images(model, subdir, out, blur_intensity)
 
 
 def extract_zip(uploaded_file_path: Path, temp_dir_path: Path) -> None:
@@ -309,15 +309,20 @@ def process_zip_file(
     2. Process images into a temp “processed” folder.
     3. Re-zip processed into `output_path`.
     """
+
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
         orig = tmp_path / "original"
         proc = tmp_path / "processed"
-
         orig.mkdir()
-        extract_zip(uploaded_file_path, orig)
-
         proc.mkdir()
-        process_images(orig, proc, selected_items, blur_intensity, model_name)
 
-        create_processed_zip(output_path, proc)
+        if uploaded_file_path.suffix != ".zip":
+            uploaded_file_path.rename(orig / uploaded_file_path.name)
+            process_directory(
+                orig, output_path.parent, selected_items, blur_intensity, model_name
+            )
+        else:
+            extract_zip(uploaded_file_path, orig)
+            process_directory(orig, proc, selected_items, blur_intensity, model_name)
+            create_processed_zip(output_path, proc)

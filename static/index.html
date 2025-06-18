@@ -25,7 +25,9 @@
             </div>
             <p>Drag & drop your file here</p>
             <p class="upload-hint">Supports .zip and .pdf files</p>
-            <input type="file" id="file-input" accept=".zip,.pdf" hidden />
+            <input type="file" id="file-input"
+              accept=".zip,.pdf,.bmp,.dng,.jpeg,.jpg,.mpo,.png,.tif,.tiff,.webp,.pfm,.heic,.asf,.avi,.gif,.m4v,.mkv,.mov,.mp4,.mpeg,.mpg,.ts,.wmv,.webm"
+              hidden />
             <button type="button" id="browse-btn" class="secondary-btn">Browse Files</button>
 
             <div id="file-info" class="file-info hidden">
@@ -43,7 +45,7 @@
 
           <!-- Instruction before file chosen -->
           <div id="instruction-content" class="instruction-text">
-            <p>📁 Upload a <strong>.zip file</strong> to blur objects in images.</p>
+            <p>📁 Upload a <strong>.zip file</strong> or media file to blur objects in images and videos.</p>
             <p>📄 Upload a <strong>.pdf file</strong> to redact sensitive information.</p>
           </div>
 

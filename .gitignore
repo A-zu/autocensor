@@ -12,6 +12,8 @@ wheels/
 # Folders
 datasets
 tests
+input
+output
 
 # resources
 *.pt
