@@ -99,7 +99,9 @@ document.addEventListener("DOMContentLoaded", () => {
     submitBtn.className = "primary-btn";
     submitLoader.style.display = "none";
     submitStatus.classList.add("hidden");
-    downloadFrame.src = "";
+    setTimeout(() => {
+      downloadFrame.src = "";
+    }, 5000);
   }
 
   function setFileDisplay(file, type, ext) {
@@ -153,7 +155,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // download state?
     if (submitBtn.classList.contains("success")) {
       downloadFrame.src = `${downloadEndpoint}/${processedFileId}`;
-      setTimeout(resetUI, 500);
+      setTimeout(resetUI, 200);
       return;
     }
 
