@@ -131,7 +131,11 @@ def blur_items(
 
 
 def process_directory(
-    model: YOLOE, input_dir: Path, output_dir: Path, verbose: bool = True
+    model: YOLOE,
+    input_dir: Path,
+    output_dir: Path,
+    blur_intensity: float,
+    verbose: bool = True,
 ) -> None:
     """
     Run model.predict on all images in `input_dir`, blur masked regions,
@@ -145,7 +149,7 @@ def process_directory(
     """
     results = model.predict(input_dir, verbose=verbose)
     for result in results:
-        processed = blur_items(result)
+        processed = blur_items(result, coefficient=blur_intensity)
         orig = Path(result.path)
         rel = orig.relative_to(input_dir)
         dest = output_dir / rel.with_suffix(".jpg")
@@ -159,6 +163,7 @@ def process_images(
     input_dir: Path,
     output_dir: Path,
     selected_items: List[str],
+    blur_intensity: float,
     model_name: str = "yoloe-v8l-seg.pt",
 ) -> None:
     """
@@ -180,7 +185,7 @@ def process_images(
         rel = subdir.relative_to(input_dir)
         out = output_dir / rel
         out.mkdir(parents=True, exist_ok=True)
-        process_directory(model, subdir, out)
+        process_directory(model, subdir, out, blur_intensity)
 
 
 def extract_zip(uploaded_file_path: Path, temp_dir_path: Path) -> None:
@@ -203,7 +208,10 @@ def create_processed_zip(processed_file_path: Path, temp_dir_path: Path) -> None
 
 
 def process_zip_file(
-    uploaded_file_path: Path, output_path: Path, selected_items: List[str]
+    uploaded_file_path: Path,
+    output_path: Path,
+    selected_items: List[str],
+    blur_intensity: float,
 ) -> None:
     """
     Full end-to-end handler for a ZIP of images:
@@ -221,6 +229,6 @@ def process_zip_file(
         extract_zip(uploaded_file_path, orig)
 
         proc.mkdir()
-        process_images(orig, proc, selected_items)
+        process_images(orig, proc, selected_items, blur_intensity)
 
         create_processed_zip(output_path, proc)

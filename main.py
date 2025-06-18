@@ -1,5 +1,4 @@
 import os
-import json
 import uuid
 from pathlib import Path
 import logging.config
@@ -139,7 +138,8 @@ async def process_chat(prompt: str = Form(...)):
 async def blur_handler(
     background_tasks: BackgroundTasks,
     file_id: str = Form(None),
-    selectedItemIds: str = Form(None),
+    prompt: str = Form(None),
+    intensity: float = Form(None),
 ):
     """
     Endpoint to handle image processing.
@@ -152,7 +152,7 @@ async def blur_handler(
     """
     input_path = INPUT_DIR / file_id
     output_path = OUTPUT_DIR / file_id
-    selected_items = json.loads(selectedItemIds)
+    selected_items = [item.strip() for item in prompt.split(",") if item.strip()]
 
     if not file_id.lower().endswith(".zip"):
         logger.error("Only .zip files are allowed")
@@ -167,7 +167,7 @@ async def blur_handler(
         raise HTTPException(status_code=404, detail="Uploaded file no longer exists")
 
     try:
-        process_zip_file(input_path, output_path, ["monitor", "document", "person"])
+        process_zip_file(input_path, output_path, selected_items, intensity)
 
         background_tasks.add_task(lambda: input_path.unlink())
 
