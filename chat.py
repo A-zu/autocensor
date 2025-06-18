@@ -1,8 +1,7 @@
 import json
 import logging
-from pathlib import Path
 import time
-from typing import List
+from pathlib import Path
 
 import fitz
 import ollama
@@ -20,31 +19,6 @@ def clean_output(response):
             output = output[4:].strip()
 
     return output
-
-
-def generate_keywords(
-    user_input: str, model: str, prompt_file: str = "blur_prompt.txt"
-) -> List[int]:
-    system_prompt = Path(prompt_file).read_text(encoding="utf-8")
-    full_prompt = (
-        f"{system_prompt.strip()}\n\nUser input:\n{user_input.strip()}\n\nResponse:"
-    )
-
-    response = ollama.generate(
-        model=model, prompt=full_prompt, stream=False, keep_alive="15m"
-    )
-
-    output = clean_output(response)
-
-    try:
-        parsed = json.loads(output)
-    except json.JSONDecodeError:
-        raise ValueError("Model returned invalid JSON.")
-
-    if not isinstance(parsed, list) or not all(isinstance(x, int) for x in parsed):
-        raise ValueError("Expected a list of integers.")
-
-    return parsed
 
 
 def estimate_token_count(text: str) -> int:

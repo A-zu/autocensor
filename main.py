@@ -14,7 +14,7 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from chat import generate_keywords, get_redactions
+from chat import get_redactions
 from blur_masked_images import process_zip_file
 from redact import redact_pdf
 
@@ -104,35 +104,6 @@ async def download_file(background_tasks: BackgroundTasks, file_id: str):
         path=file_path,
         filename=file_path.name[37:],  # UUID's are 36 characters long (plus "_")
     )
-
-
-@app.post("/chat")
-async def process_chat(prompt: str = Form(...)):
-    """
-    Endpoint to process prompts and return selected items.
-
-    Args:
-        prompt: The prompt from the user
-
-    Returns:
-        JSON response with message and selected items
-    """
-    try:
-        selectedItemIds = generate_keywords(prompt, OLLAMA_MODEL)
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "message": "Processed prompt",
-                "selectedItemIds": selectedItemIds,
-            },
-        )
-
-    except Exception as e:
-        logger.error(str(e))
-        raise HTTPException(
-            status_code=500, detail=f"Error processing chat message: {str(e)}"
-        )
 
 
 @app.post("/blur")
