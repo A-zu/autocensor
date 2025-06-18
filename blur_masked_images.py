@@ -289,20 +289,32 @@ def create_processed_zip(processed_file_path: Path, temp_dir_path: Path) -> None
                 z.write(file, arcname=file.relative_to(temp_dir_path))
 
 
-def process_zip_file(
+def process_file(
     uploaded_file_path: Path,
-    output_path: Path,
+    output_dir: Path,
     selected_items: List[str],
     blur_intensity: float,
     model_name: str,
-) -> None:
+) -> Path:
     """
-    Full end-to-end handler for a ZIP of images:
+    Handles processing of an uploaded file (image, video, or ZIP archive).
 
-    1. Unzip to a temp “original” folder.
-    2. Process images into a temp “processed” folder.
-    3. Re-zip processed into `output_path`.
+    Behavior:
+    - If the uploaded file is a ZIP archive:
+        1. Extracts contents into a temporary "original" folder.
+        2. Processes each file, applying blur to selected items.
+        3. Saves processed outputs into a temporary "processed" folder.
+        4. Re-archives the processed files into a ZIP saved at `output_dir`.
+
+    - If the uploaded file is a single image or video:
+        1. Moves the file to a temporary "original" folder.
+        2. Processes the file, applying blur to selected items.
+        3. Saves the result as a .jpg or .mp4 file in `output_dir`.
+
+    Returns:
+        Path to the final processed file (ZIP, JPG, or MP4).
     """
+    output_path = output_dir / uploaded_file_path.name
 
     with tempfile.TemporaryDirectory() as tmp:
         tmp_path = Path(tmp)
@@ -312,11 +324,19 @@ def process_zip_file(
         proc.mkdir()
 
         if uploaded_file_path.suffix != ".zip":
+            suffix = uploaded_file_path.suffix[1:].lower()
+            if suffix in VID_FORMATS:
+                output_path = output_path.with_suffix(".mp4")
+            else:
+                output_path = output_path.with_suffix(".jpg")
+
             uploaded_file_path.rename(orig / uploaded_file_path.name)
             process_directory(
-                orig, output_path.parent, selected_items, blur_intensity, model_name
+                orig, output_dir, selected_items, blur_intensity, model_name
             )
         else:
             extract_zip(uploaded_file_path, orig)
             process_directory(orig, proc, selected_items, blur_intensity, model_name)
             create_processed_zip(output_path, proc)
+
+    return output_path

@@ -15,7 +15,7 @@ from fastapi import (
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
 from chat import get_redactions
-from blur_masked_images import process_zip_file
+from blur_masked_images import process_file
 from redact import redact_pdf
 from ultralytics.data.utils import IMG_FORMATS, VID_FORMATS
 
@@ -28,8 +28,8 @@ YOLOE_MODEL = os.getenv("YOLOE_MODEL") or "yoloe-v8l-seg.pt"
 
 app = FastAPI()
 
-INPUT_DIR = Path("input")
-OUTPUT_DIR = Path("output")
+INPUT_DIR = Path(__file__).parent / "input"
+OUTPUT_DIR = Path(__file__).parent / "output"
 INPUT_DIR.mkdir(exist_ok=True)
 OUTPUT_DIR.mkdir(exist_ok=True)
 
@@ -123,7 +123,6 @@ async def blur_handler(
         JSON response with status and message
     """
     input_path = INPUT_DIR / file_id
-    output_path = OUTPUT_DIR / file_id
     selected_items = [item.strip() for item in prompt.split(",") if item.strip()]
 
     suffix = Path(file_id).suffix[1:].lower()
@@ -140,8 +139,8 @@ async def blur_handler(
         raise HTTPException(status_code=404, detail="Uploaded file no longer exists")
 
     try:
-        process_zip_file(
-            input_path, output_path, selected_items, intensity, YOLOE_MODEL
+        output_path = process_file(
+            input_path, OUTPUT_DIR, selected_items, intensity, YOLOE_MODEL
         )
 
         return JSONResponse(
@@ -149,6 +148,7 @@ async def blur_handler(
             content={
                 "status": "success",
                 "message": "File processed successfully",
+                "fileId": output_path.name,
             },
         )
 
@@ -196,6 +196,7 @@ async def redact_handler(
             content={
                 "status": "success",
                 "message": "File processed successfully",
+                "fileId": output_path.name,
             },
         )
 

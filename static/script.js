@@ -182,8 +182,8 @@ document.addEventListener("DOMContentLoaded", () => {
         const err = await resp.json();
         throw new Error(`Processing failed: ${err.detail}`);
       }
-      await resp.json();
-      processedFileId = fileId;
+      const result = await resp.json();
+      processedFileId = result.fileId;
 
       // success
       submitBtn.textContent = "Download";
