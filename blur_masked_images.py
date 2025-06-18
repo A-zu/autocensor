@@ -265,6 +265,8 @@ def process_images(
     classes = selected_items
     model.set_classes(classes, model.get_text_pe(classes))
 
+    process_directory(model, input_dir, output_dir, blur_intensity)
+
     for subdir in input_dir.rglob("*"):
         if not subdir.is_dir():
             continue

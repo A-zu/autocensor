@@ -42,7 +42,8 @@ ENV HOST=0.0.0.0 \
     OLLAMA_HOST=ollama:11434 \
     OLLAMA_MODEL=qwen3:4b \
     YOLOE_MODEL=yoloe-v8l-seg.pt \
-    YOLO_CONFIG_DIR=/yolo/config
+    YOLO_CONFIG_DIR=/yolo/config \
+    YOLO_BATCH_SIZE=8
 
 # Start the app
 CMD ["uv", "run", "main.py"]
