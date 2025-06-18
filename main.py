@@ -15,9 +15,8 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-
 from chat import generate_keywords, get_redactions
-from file_processing import process_zip_file
+from blur_masked_images import process_zip_file
 from redact import redact_pdf
 
 logger = logging.getLogger(__name__)
