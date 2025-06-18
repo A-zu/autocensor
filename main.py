@@ -104,7 +104,6 @@ async def download_file(background_tasks: BackgroundTasks, file_id: str):
     return FileResponse(
         path=file_path,
         filename=file_path.name[37:],  # UUID's are 36 characters long (plus "_")
-        media_type="application/zip",
     )
 
 
@@ -169,7 +168,7 @@ async def blur_handler(
         raise HTTPException(status_code=404, detail="Uploaded file no longer exists")
 
     try:
-        process_zip_file(input_path, output_path, selected_items)
+        process_zip_file(input_path, output_path, ["monitor", "document", "person"])
 
         background_tasks.add_task(lambda: input_path.unlink())
 

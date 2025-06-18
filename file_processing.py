@@ -1,133 +1,226 @@
-import os
-import tempfile
+import time
+import logging
 import zipfile
+import tempfile
+from typing import List
 from pathlib import Path
 
 import cv2
-import easyocr
+import torch
 import numpy as np
-import pillow_heif
-from PIL import Image
-from ultralytics import YOLO
+from ultralytics import YOLOE
+from ultralytics.engine.results import Results
+
+logger = logging.getLogger(__name__)
 
 
-def blur(bbox, image, blur_function):
-    # Extract coordinates from bounding box
-    x_min, y_min = bbox[0], bbox[1]
-    x_max, y_max = bbox[2], bbox[3]
+def get_kernel(
+    image: np.ndarray, *, coefficient: float, max_fraction: float = 0.05
+) -> tuple[int, int]:
+    """
+    Compute an odd-sized Gaussian kernel based on image size.
 
-    # Define the region of interest (ROI)
-    roi = image[y_min:y_max, x_min:x_max]
+    Args:
+        image: HxWxC array.
+        coefficient: [0.0-1.0] fraction of `max_fraction` of min(H, W).
+        max_fraction: maximum fraction of the smaller image dimension.
 
-    # Apply blurring function to the ROI
-    blurred_roi = blur_function(roi)
+    Returns:
+        A tuple (k, k) where k is odd and ~ coefficient*max_fraction*min(H,W).
+    """
+    # clamp coefficient
+    coefficient = max(0.0, min(1.0, coefficient))
 
-    # Replace the original ROI with the blurred version in the image
-    image[y_min:y_max, x_min:x_max] = blurred_roi
-
-
-def blur_items(result, items_to_blur, image, blur_function):
-    for box in result.boxes:
-        if box.cls in items_to_blur:
-            bbox = [int(x) for x in box.xyxy[0]]
-            blur(bbox, image, blur_function)
-
-
-def blur_text(results, image, blur_function):
-    for bbox, text, confidence in results:
-        x_coords = [int(p[0]) for p in bbox]
-        y_coords = [int(p[1]) for p in bbox]
-
-        # Get the top-left and bottom-right
-        bbox = (min(x_coords), min(y_coords), max(x_coords), max(y_coords))
-        blur(bbox, image, blur_function)
+    h, w = image.shape[:2]
+    base = min(h, w)
+    # force odd with bitwise OR 1
+    k = int(base * max_fraction * coefficient) | 1
+    return (k, k)
 
 
-def blur_function(roi):
-    # Calculate the kernel size based on the ROI dimensions
-    h, w = roi.shape[:2]
-    blur_coefficient = 0.05 * 6
-    ksize_height = int(h * blur_coefficient) | 1
-    ksize_width = int(w * blur_coefficient) | 1
+def blur_image_copy(
+    image: np.ndarray, *, coefficient: float = 0.5, max_fraction: float = 0.05
+) -> np.ndarray:
+    """
+    Return a fully blurred copy of `image`, with blur scaled
+    by `coefficient` at a working height of 1080 px.
 
-    # Apply Gaussian Blur to the ROI
-    blurred_roi = cv2.GaussianBlur(roi, (ksize_height, ksize_width), 0)
-    return blurred_roi
+    Args:
+        image: BGR numpy array.
+        coefficient: [0.0-1.0] controls blur strength.
+        max_fraction: maximum blur kernel relative to image size.
+
+    Returns:
+        A new numpy array, same shape as `image`, blurred.
+    """
+    # remember original
+    h, w = image.shape[:2]
+
+    # scale to height=1080 (preserve aspect)
+    target_h = 1080
+    new_w = int(w / h * target_h)
+    resized = cv2.resize(image, (new_w, target_h))
+
+    # blur & back-resize
+    kernel = get_kernel(resized, coefficient=coefficient, max_fraction=max_fraction)
+    blurred = cv2.GaussianBlur(resized, kernel, 0)
+    return cv2.resize(blurred, (w, h))
 
 
-def load_image(file: Path):
-    if file.suffix.lower() == ".heic":
-        heif_file = pillow_heif.read_heif(file)
-        image = Image.frombytes(heif_file.mode, heif_file.size, heif_file.data)
+def blur_mask(mask: torch.Tensor, image: np.ndarray, blurred_image: np.ndarray) -> None:
+    """
+    In-place blend `blurred_image` into `image` where `mask` is True.
 
-        # Convert to RGB if necessary
-        if image.mode != "RGB":
-            image = image.convert("RGB")
+    Args:
+        mask: 2D tensor (H, W) of booleans or floats.
+        image: original image to modify.
+        blurred_image: fully blurred version (same shape as image).
 
-        # Convert to NumPy array and BGR color space
-        image_np = np.array(image)
-        return cv2.cvtColor(image_np, cv2.COLOR_RGB2BGR)
-    else:
-        return cv2.imread(str(file))
+    Side-Effects:
+        Writes into `image` where mask==255.
+    """
+    # binary 0/255
+    mask_np = (mask.cpu().numpy().astype(np.uint8)) * 255
 
-
-def process_image(model: YOLO, reader: easyocr.Reader, file: Path, items_to_blur):
-    image = load_image(file)
-    if image is None:
-        file.unlink()
-        return
-
-    results = model(image)
-    blur_items(results[0], items_to_blur, image, blur_function)
-
-    # 80 -> id of text
-    if 80 in items_to_blur:
-        results_text = reader.readtext(image)
-        blur_text(results_text, image, blur_function)
-
-    cv2.imwrite(
-        file.with_suffix(".jpg"),
-        image,
-        [cv2.IMWRITE_JPEG_QUALITY, 90],
+    # resize to image dims if needed
+    mask_resized = cv2.resize(
+        mask_np, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST
     )
-    if file.suffix != ".jpg":
-        file.unlink()
+
+    # expand to 3 channels
+    mask_3ch = cv2.merge([mask_resized] * 3)
+
+    # in-place blend
+    image[mask_3ch == 255] = blurred_image[mask_3ch == 255]
 
 
-def process_images(dir_path: Path, items_to_blur):
-    model = YOLO("yolo12x.pt")
-    reader = easyocr.Reader(["en", "no"], gpu=True)
-    for root, _, files in os.walk(dir_path):
-        for file_name in files:
-            file_path = Path(root) / file_name
-            process_image(model, reader, file_path, items_to_blur)
+def blur_items(
+    result: Results, *, coefficient: float = 0.5, max_fraction: float = 0.05
+) -> np.ndarray:
+    """
+    Combine all masks from `result`, blur only those regions, and return the final image.
+
+    Args:
+        result: a single YOLOE Results object.
+        coefficient: blur strength.
+        max_fraction: relative kernel max fraction.
+
+    Returns:
+        A new numpy image with masked areas blurred.
+    """
+    image = result.orig_img.copy()
+    blurred_image = blur_image_copy(
+        image, coefficient=coefficient, max_fraction=max_fraction
+    )
+
+    if result.masks:
+        try:
+            # combine N×H×W → H×W mask
+            combined_mask = torch.any(result.masks.data > 0.5, dim=0)
+            logger.debug(f"Combined mask shape: {combined_mask.shape}")
+
+            start = time.perf_counter()
+            blur_mask(combined_mask, image, blurred_image)
+            duration = time.perf_counter() - start
+
+            logger.debug(f"Blurring took {duration:.3f}s — image shape: {image.shape}")
+        except Exception:
+            logger.exception("Error during mask processing and blurring.")
+
+    return image
 
 
-def extract_zip(uploaded_file_path: Path, temp_dir_path: Path):
-    with zipfile.ZipFile(uploaded_file_path, "r") as zip_ref:
-        zip_ref.extractall(temp_dir_path)
+def process_directory(
+    model: YOLOE, input_dir: Path, output_dir: Path, verbose: bool = True
+) -> None:
+    """
+    Run model.predict on all images in `input_dir`, blur masked regions,
+    and write results (JPEG) into `output_dir`, preserving subpaths.
+
+    Args:
+        model: an initialized YOLOE model.
+        input_dir: root folder to read images from.
+        output_dir: root folder to write processed images to.
+        verbose: passed to model.predict.
+    """
+    results = model.predict(input_dir, verbose=verbose)
+    for result in results:
+        processed = blur_items(result)
+        orig = Path(result.path)
+        rel = orig.relative_to(input_dir)
+        dest = output_dir / rel.with_suffix(".jpg")
+        dest.parent.mkdir(parents=True, exist_ok=True)
+
+        # save as JPEG at quality=90
+        cv2.imwrite(str(dest), processed, [cv2.IMWRITE_JPEG_QUALITY, 90])
 
 
-def process_images_in_temp_dir(temp_dir_path: Path, selected_items):
-    process_images(temp_dir_path, selected_items)
+def process_images(
+    input_dir: Path,
+    output_dir: Path,
+    selected_items: List[str],
+    model_name: str = "yoloe-v8l-seg.pt",
+) -> None:
+    """
+    Top-level image processing: sets up the YOLOE model and
+    calls `process_directory` for each subfolder.
+
+    Args:
+        input_dir: folder with extracted images.
+        output_dir: folder to receive processed subfolders.
+        selected_items: items for class selection.
+    """
+    model = YOLOE(model_name)
+    classes = selected_items
+    model.set_classes(classes, model.get_text_pe(classes))
+
+    for subdir in input_dir.rglob("*"):
+        if not subdir.is_dir():
+            continue
+        rel = subdir.relative_to(input_dir)
+        out = output_dir / rel
+        out.mkdir(parents=True, exist_ok=True)
+        process_directory(model, subdir, out)
 
 
-def create_processed_zip(processed_file_path: Path, temp_dir_path: Path):
-    with zipfile.ZipFile(processed_file_path, "w", zipfile.ZIP_DEFLATED) as zipf:
-        for root, _, files in os.walk(temp_dir_path):
-            for file_name in files:
-                file_path = Path(root) / file_name
-                zipf.write(file_path, arcname=file_path.relative_to(temp_dir_path))
+def extract_zip(uploaded_file_path: Path, temp_dir_path: Path) -> None:
+    """
+    Unzip `uploaded_file_path` into `temp_dir_path`.
+    """
+    with zipfile.ZipFile(uploaded_file_path, "r") as z:
+        z.extractall(temp_dir_path)
+
+
+def create_processed_zip(processed_file_path: Path, temp_dir_path: Path) -> None:
+    """
+    Zip all files under `temp_dir_path` into `processed_file_path`,
+    preserving folder structure.
+    """
+    with zipfile.ZipFile(processed_file_path, "w", zipfile.ZIP_DEFLATED) as z:
+        for file in temp_dir_path.rglob("*"):
+            if file.is_file():
+                z.write(file, arcname=file.relative_to(temp_dir_path))
 
 
 def process_zip_file(
-    uploaded_file_path: Path,
-    output_path: Path,
-    selected_items,
-):
-    with tempfile.TemporaryDirectory() as temp_dir:
-        temp_dir_path = Path(temp_dir)
+    uploaded_file_path: Path, output_path: Path, selected_items: List[str]
+) -> None:
+    """
+    Full end-to-end handler for a ZIP of images:
 
-        extract_zip(uploaded_file_path, temp_dir_path)
-        process_images_in_temp_dir(temp_dir_path, selected_items)
-        create_processed_zip(output_path, temp_dir_path)
+    1. Unzip to a temp “original” folder.
+    2. Process images into a temp “processed” folder.
+    3. Re-zip processed into `output_path`.
+    """
+    with tempfile.TemporaryDirectory() as tmp:
+        tmp_path = Path(tmp)
+        orig = tmp_path / "original"
+        proc = tmp_path / "processed"
+
+        orig.mkdir()
+        extract_zip(uploaded_file_path, orig)
+
+        proc.mkdir()
+        process_images(orig, proc, selected_items)
+
+        create_processed_zip(output_path, proc)
