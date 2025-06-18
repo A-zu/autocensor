@@ -109,7 +109,7 @@ document.addEventListener("DOMContentLoaded", () => {
     // download state?
     if (submitBtn.classList.contains("success")) {
       downloadFrame.src = `${downloadEndpoint}/${processedFileId}`;
-      setTimeout(resetUI, 200);
+      setTimeout(resetUI, 500);
       return;
     }
 
