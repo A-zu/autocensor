@@ -182,7 +182,15 @@ def process_images(
     start_time = time.perf_counter()
     videos = defaultdict(list)
     try:
-        results = model.predict(input_dir, verbose=verbose, batch=int(YOLO_BATCH_SIZE))
+        results = model.predict(
+            input_dir,
+            verbose=verbose,
+            batch=int(YOLO_BATCH_SIZE),
+            retina_masks=True,
+            show_labels=False,
+            show_conf=False,
+            show_boxes=False,
+        )
     except FileNotFoundError as e:
         logger.debug(str(e))
         return

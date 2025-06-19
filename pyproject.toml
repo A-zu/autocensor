@@ -10,6 +10,7 @@ dependencies = [
   "numpy>=2.2.5",
   "ollama>=0.4.8",
   "opencv-python>=4.11.0.86",
+  "pillow-heif>=0.22.0",
   "pymupdf>=1.26.0",
   "python-multipart>=0.0.20",
   "torch>=2.7.0",
