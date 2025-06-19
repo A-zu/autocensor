@@ -181,7 +181,11 @@ def process_images(
 
     start_time = time.perf_counter()
     videos = defaultdict(list)
-    results = model.predict(input_dir, verbose=verbose, batch=int(YOLO_BATCH_SIZE))
+    try:
+        results = model.predict(input_dir, verbose=verbose, batch=int(YOLO_BATCH_SIZE))
+    except FileNotFoundError as e:
+        logger.debug(str(e))
+        return
 
     prediction_time = time.perf_counter() - start_time
     avg_time = prediction_time / len(results) if len(results) else 0.0
@@ -336,6 +340,7 @@ def process_file(
             )
         else:
             extract_zip(uploaded_file_path, orig)
+            uploaded_file_path.unlink()
             process_directory(orig, proc, selected_items, blur_intensity, model_name)
             create_processed_zip(output_path, proc)
 
