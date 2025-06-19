@@ -160,6 +160,7 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // upload
+    browseBtn.disabled = true;
     submitBtn.disabled = true;
     submitBtn.textContent = "Uploading…";
     submitLoader.style.display = "block";
@@ -188,12 +189,13 @@ document.addEventListener("DOMContentLoaded", () => {
       processedFileId = result.fileId;
 
       // success
+      browseBtn.disabled = false;
+      submitBtn.disabled = false;
       submitBtn.textContent = "Download";
       submitBtn.classList.add("success");
-      submitLoader.style.display = "none";
-      submitBtn.disabled = false;
       submitStatus.textContent = "Done!";
       submitStatus.style.color = "var(--success-color)";
+      submitLoader.style.display = "none";
       submitStatus.classList.remove("hidden");
     } catch (err) {
       submitBtn.textContent = "Submit";
