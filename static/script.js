@@ -215,8 +215,11 @@ document.addEventListener("DOMContentLoaded", () => {
       submitLoader.style.display = "none";
       submitStatus.classList.remove("hidden");
     } catch (err) {
-      submitBtn.textContent = "Submit";
+      enableDropArea();
+      isProcessing = false;
+      browseBtn.disabled = false;
       submitBtn.disabled = false;
+      submitBtn.textContent = "Submit";
       submitLoader.style.display = "none";
       submitStatus.textContent = err.message;
       submitStatus.style.color = "var(--error-color)";
