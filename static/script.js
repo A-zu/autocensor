@@ -56,8 +56,9 @@ document.addEventListener("DOMContentLoaded", () => {
   const pdfFormats = ["pdf"];
 
   // —— State ——
+  let fileType = null;
+  let isProcessing = false;
   let selectedFile = null;
-  let fileType = null; // "zip" or "pdf"
   let processedFileId = null;
 
   // —— Endpoints ——
@@ -82,6 +83,18 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   function unhighlight() {
     dropArea.classList.remove("drag-over");
+  }
+
+  function disableDropArea() {
+    dropArea.classList.add("disabled");
+    dropArea.style.pointerEvents = "none";
+    dropArea.style.opacity = "0.5";
+  }
+
+  function enableDropArea() {
+    dropArea.classList.remove("disabled");
+    dropArea.style.pointerEvents = "auto";
+    dropArea.style.opacity = "1";
   }
 
   function resetUI() {
@@ -160,6 +173,8 @@ document.addEventListener("DOMContentLoaded", () => {
     }
 
     // upload
+    disableDropArea();
+    isProcessing = true;
     browseBtn.disabled = true;
     submitBtn.disabled = true;
     submitBtn.textContent = "Uploading…";
@@ -189,6 +204,8 @@ document.addEventListener("DOMContentLoaded", () => {
       processedFileId = result.fileId;
 
       // success
+      enableDropArea();
+      isProcessing = false;
       browseBtn.disabled = false;
       submitBtn.disabled = false;
       submitBtn.textContent = "Download";
@@ -252,9 +269,10 @@ document.addEventListener("DOMContentLoaded", () => {
   ["dragleave", "drop"].forEach((evt) =>
     dropArea.addEventListener(evt, unhighlight, false)
   );
-  dropArea.addEventListener("drop", (e) =>
-    validateAndProcessFile(e.dataTransfer.files[0])
-  );
+  dropArea.addEventListener("drop", (e) => {
+    if (isProcessing) return;
+    validateAndProcessFile(e.dataTransfer.files[0]);
+  });
 
   submitBtn.addEventListener("click", handleSubmit);
 
