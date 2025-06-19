@@ -93,7 +93,7 @@ def blur_image_copy(
     h, w = image.shape[:2]
 
     # scale to height=1080 (preserve aspect)
-    target_h = 1080
+    target_h = 640
     new_w = int(w / h * target_h)
     resized = cv2.resize(image, (new_w, target_h))
 
