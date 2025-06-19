@@ -411,28 +411,34 @@ def process_file(
     """
     output_path = output_dir / uploaded_file_path.name
 
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_path = Path(tmp)
-        orig = tmp_path / "original"
-        proc = tmp_path / "processed"
-        orig.mkdir()
-        proc.mkdir()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            orig = tmp_path / "original"
+            proc = tmp_path / "processed"
+            orig.mkdir()
+            proc.mkdir()
 
-        if uploaded_file_path.suffix != ".zip":
-            suffix = uploaded_file_path.suffix[1:].lower()
-            if suffix in VID_FORMATS:
-                output_path = output_path.with_suffix(".mp4")
+            if uploaded_file_path.suffix != ".zip":
+                suffix = uploaded_file_path.suffix[1:].lower()
+                if suffix in VID_FORMATS:
+                    output_path = output_path.with_suffix(".mp4")
+                else:
+                    output_path = output_path.with_suffix(".jpg")
+
+                uploaded_file_path.rename(orig / uploaded_file_path.name)
+                process_directory(
+                    orig, output_dir, selected_items, blur_intensity, model_name
+                )
             else:
-                output_path = output_path.with_suffix(".jpg")
+                extract_zip(uploaded_file_path, orig)
+                uploaded_file_path.unlink()
+                process_directory(
+                    orig, proc, selected_items, blur_intensity, model_name
+                )
+                create_processed_zip(output_path, proc)
 
-            uploaded_file_path.rename(orig / uploaded_file_path.name)
-            process_directory(
-                orig, output_dir, selected_items, blur_intensity, model_name
-            )
-        else:
-            extract_zip(uploaded_file_path, orig)
-            uploaded_file_path.unlink()
-            process_directory(orig, proc, selected_items, blur_intensity, model_name)
-            create_processed_zip(output_path, proc)
+    finally:
+        torch.cuda.empty_cache()
 
     return output_path
