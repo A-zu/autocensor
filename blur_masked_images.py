@@ -3,7 +3,7 @@ import time
 import logging
 import zipfile
 import tempfile
-from typing import List
+from typing import Dict, List, Tuple
 from pathlib import Path
 from collections import defaultdict
 
@@ -48,6 +48,31 @@ class VideoCaptureContext:
     def __exit__(self, exc_type, exc_val, exc_tb):
         if self.cap is not None:
             self.cap.release()
+
+
+class FrameTimeLogger:
+    def __init__(self, label: str, count: int = None):
+        self.label = label
+        self.count = count
+
+    def set_count(self, count: int):
+        self.count = count
+
+    def __enter__(self):
+        self.start = time.perf_counter()
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        duration = time.perf_counter() - self.start
+        if self.count:
+            avg = duration / self.count
+            fps = self.count / duration
+            logger.info(
+                f"{self.label:<20} — {self.count:>4} frames in {duration:>5.2f}s "
+                f"(avg: {avg:.4f}s, {fps:.2f} FPS)"
+            )
+        else:
+            logger.info(f"{self.label} took {duration:.2f}s")
 
 
 def get_kernel(
@@ -125,99 +150,95 @@ def blur_mask(mask: torch.Tensor, image: np.ndarray, blurred_image: np.ndarray) 
     image[mask_3ch == 255] = blurred_image[mask_3ch == 255]
 
 
-def blur_items(
-    result: Results, *, coefficient: float = 0.5, max_fraction: float = 0.05
-) -> np.ndarray:
+def process_results(
+    results: List[Results], *, coefficient: float = 0.5, max_fraction: float = 0.05
+) -> Tuple[Dict[Path, np.ndarray], Dict[Path, List[np.ndarray]]]:
     """
-    Combine all masks from `result`, blur only those regions, and return the final image.
+    Process YOLO model prediction results to blur masked regions in each image.
 
     Args:
-        result: a single YOLOE Results object.
-        coefficient: blur strength.
-        max_fraction: relative kernel max fraction.
+        results: List of YOLO `Results` objects.
+        coefficient: Strength of blur to apply [0.0–1.0].
+        max_fraction: Maximum blur kernel size as a fraction of image size.
 
     Returns:
-        A new numpy image with masked areas blurred.
+        A tuple of:
+            - Dictionary mapping image paths to processed image arrays.
+            - Dictionary mapping video paths to lists of processed frame arrays.
     """
-    image = result.orig_img.copy()
-    blurred_image = blur_image_copy(
-        image, coefficient=coefficient, max_fraction=max_fraction
-    )
-
-    if result.masks:
-        try:
-            combined_mask = torch.any(result.masks.data > 0.5, dim=0)
-            blur_mask(combined_mask, image, blurred_image)
-
-        except Exception as e:
-            logger.exception(f"Error during mask processing and blurring. {str(e)}")
-
-    return image
-
-
-def process_images(
-    model: YOLOE,
-    input_dir: Path,
-    output_dir: Path,
-    blur_intensity: float,
-    verbose: bool = True,
-) -> None:
-    """
-    Run model.predict on all images in `input_dir`, blur masked regions,
-    and write results (JPEG) into `output_dir`, preserving subpaths.
-
-    Args:
-        model: an initialized YOLOE model.
-        input_dir: root folder to read images from.
-        output_dir: root folder to write processed images to.
-        verbose: passed to model.predict.
-    """
-    logger.info(f"Processing directory: {input_dir=}")
-
-    start_time = time.perf_counter()
+    images = {}
     videos = defaultdict(list)
-    try:
-        results = model.predict(
-            input_dir,
-            verbose=verbose,
-            batch=int(YOLO_BATCH_SIZE),
-            retina_masks=True,
-            show_labels=False,
-            show_conf=False,
-            show_boxes=False,
-        )
-    except FileNotFoundError as e:
-        logger.debug(str(e))
-        return
-
-    prediction_time = time.perf_counter() - start_time
-    avg_time = prediction_time / len(results) if len(results) else 0.0
-    logger.info(f"Predicted {len(results)} frames in {prediction_time:.2f} seconds.")
-    logger.info(
-        f"Average prediction time per item: {avg_time:.4f} seconds. ({1 / avg_time:.2f} fps)"
-    )
 
     for result in results:
-        processed = blur_items(result, coefficient=blur_intensity)
-        orig = Path(result.path)
-        if orig.suffix[1:].lower() in VID_FORMATS:
-            videos[orig].append(processed)
+        image = result.orig_img.copy()
+
+        if result.masks:
+            try:
+                blurred_image = blur_image_copy(
+                    image, coefficient=coefficient, max_fraction=max_fraction
+                )
+                combined_mask = torch.any(result.masks.data > 0.5, dim=0)
+                blur_mask(combined_mask, image, blurred_image)
+
+            except Exception:
+                logger.exception("Error during mask processing and blurring")
+
+        path = Path(result.path)
+
+        if path.suffix[1:].lower() in VID_FORMATS:
+            videos[path].append(image)
+        else:
+            images[path] = image
+
+    return images, videos
+
+
+def save_images(
+    images: Dict[Path, np.ndarray], root_dir: Path, output_dir: Path
+) -> None:
+    """
+    Save processed images to disk, preserving relative paths.
+
+    Args:
+        images: Dictionary mapping input paths to image arrays.
+        root_dir: Root of original input directory structure.
+        output_dir: Destination directory to save processed images.
+    """
+    for image_path, image in images.items():
+        if image is None:
+            logger.warning(f"No frame to write for image: {image_path=}")
             continue
 
-        rel = orig.relative_to(input_dir)
+        rel = image_path.relative_to(root_dir)
         dest = output_dir / rel.with_suffix(".jpg")
         dest.parent.mkdir(parents=True, exist_ok=True)
 
         # save as JPEG at quality=90
-        cv2.imwrite(str(dest), processed, [cv2.IMWRITE_JPEG_QUALITY, 90])
+        cv2.imwrite(str(dest), image, [cv2.IMWRITE_JPEG_QUALITY, 90])
         logger.debug(f"Saved image: {dest=}")
 
+
+def save_videos(
+    videos: Dict[Path, List[np.ndarray]], root_dir: Path, output_dir: Path
+) -> None:
+    """
+    Save processed video frames to disk as MP4 files.
+
+    Args:
+        videos: Dictionary mapping video paths to lists of frame arrays.
+        root_dir: Root of original input directory structure.
+        output_dir: Destination directory to save processed videos.
+    """
     for video_path, frames in videos.items():
-        if not frames:
+        if frames is None:
             logger.warning(f"No frames to write for video: {video_path=}")
             continue
 
-        rel = video_path.relative_to(input_dir)
+        if any(frame.shape != frames[0].shape for frame in frames):
+            logger.error(f"Inconsistent frame shapes in video: {video_path=}")
+            continue
+
+        rel = video_path.relative_to(root_dir)
         dest = output_dir / rel.with_suffix(".mp4")
         dest.parent.mkdir(parents=True, exist_ok=True)
 
@@ -229,21 +250,82 @@ def process_images(
             logger.warning(f"Invalid FPS from {video_path=}, defaulting to 30.0")
 
         h, w = frames[0].shape[:2]
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+        logger.debug(
+            f"Preparing to write video: {dest} ({len(frames)} frames @ {fps:.2f} FPS)"
+        )
 
-        with VideoWriterContext(dest, fourcc, fps, (w, h)) as writer:
-            for frame in frames:
-                writer.write(frame)
+        try:
+            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+            with VideoWriterContext(dest, fourcc, fps, (w, h)) as writer:
+                start = time.perf_counter()
 
-            logger.debug(f"Saved video: {dest} ({len(frames)} frames @ {fps:.2f} FPS)")
+                for frame in frames:
+                    writer.write(frame)
 
-    total_time = time.perf_counter() - start_time
-    avg_time = total_time / len(results) if len(results) else 0.0
+                elapsed = time.perf_counter() - start
+                logger.debug(
+                    f"Saved video: {dest} ({len(frames)} frames @ {fps:.2f} FPS) in {elapsed:.2f}s"
+                )
 
-    logger.info(f"Processed {len(results)} frames in {total_time:.2f} seconds.")
-    logger.info(
-        f"Average processing time per item: {avg_time:.4f} seconds. ({1 / avg_time:.2f} fps)"
-    )
+        except Exception:
+            logger.exception(f"Failed to write video {dest}")
+
+
+def process_images(
+    model: YOLOE,
+    input_dir: Path,
+    output_dir: Path,
+    blur_intensity: float,
+    verbose: bool = True,
+) -> int:
+    """
+    End-to-end image and video processing for a given directory.
+
+    This function:
+      - Runs detection on all frames.
+      - Applies blur to masked regions.
+      - Saves processed images and video outputs.
+
+    Args:
+        model: YOLOE model used for prediction.
+        input_dir: Folder with images/videos to process.
+        output_dir: Folder to write processed files.
+        blur_intensity: Blur strength passed to blurring function.
+        verbose: Whether to print model.predict logs.
+
+    Returns:
+        Total number of frames processed.
+    """
+    with FrameTimeLogger("Detection") as timer:
+        try:
+            results = model.predict(
+                input_dir,
+                verbose=verbose,
+                batch=int(YOLO_BATCH_SIZE),
+                retina_masks=True,
+                show_labels=False,
+                show_conf=False,
+                show_boxes=False,
+            )
+            total_frames = len(results)
+            timer.set_count(total_frames)
+
+        except FileNotFoundError as e:
+            logger.debug(str(e))
+            return
+
+    with FrameTimeLogger("Blurring", total_frames):
+        images, videos = process_results(results, coefficient=blur_intensity)
+
+    if images:
+        with FrameTimeLogger("Saving images", len(images)):
+            save_images(images, input_dir, output_dir)
+
+    if videos:
+        with FrameTimeLogger("Saving videos", total_frames - len(images)):
+            save_videos(videos, input_dir, output_dir)
+
+    return total_frames
 
 
 def process_directory(
@@ -266,15 +348,21 @@ def process_directory(
     classes = selected_items
     model.set_classes(classes, model.get_text_pe(classes))
 
-    process_images(model, input_dir, output_dir, blur_intensity)
+    with FrameTimeLogger(f"Processing directory — '{input_dir.name}'") as timer:
+        total_frames = process_images(model, input_dir, output_dir, blur_intensity)
+        timer.set_count(total_frames)
 
     for subdir in input_dir.rglob("*"):
         if not subdir.is_dir():
             continue
+
         rel = subdir.relative_to(input_dir)
         out = output_dir / rel
         out.mkdir(parents=True, exist_ok=True)
-        process_images(model, subdir, out, blur_intensity)
+
+        with FrameTimeLogger(f"Processing directory — '{subdir.name}'") as timer:
+            total_frames = process_images(model, subdir, out, blur_intensity)
+            timer.set_count(total_frames)
 
 
 def extract_zip(uploaded_file_path: Path, temp_dir_path: Path) -> None:

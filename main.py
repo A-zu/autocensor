@@ -1,7 +1,7 @@
 import os
 import uuid
-from pathlib import Path
 import logging.config
+from pathlib import Path
 
 from fastapi import (
     BackgroundTasks,
@@ -14,10 +14,11 @@ from fastapi import (
 )
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
 from fastapi.staticfiles import StaticFiles
-from chat import get_redactions
-from blur_masked_images import process_file
-from redact import redact_pdf
 from ultralytics.data.utils import IMG_FORMATS, VID_FORMATS
+
+from chat import get_redactions
+from redact import redact_pdf
+from blur_masked_images import process_file
 
 logger = logging.getLogger(__name__)
 
@@ -152,11 +153,9 @@ async def blur_handler(
             },
         )
 
-    except Exception as e:
-        logger.error(str(e))
-        raise HTTPException(
-            status_code=500, detail="Error processing file: 500 Internal Server Error"
-        )
+    except Exception:
+        logger.exception("Internal Server Error")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 @app.post("/redact")
@@ -200,11 +199,9 @@ async def redact_handler(
             },
         )
 
-    except Exception as e:
-        logger.error(str(e))
-        raise HTTPException(
-            status_code=500, detail="Error processing file: 500 Internal Server Error"
-        )
+    except Exception:
+        logger.exception("Internal Server Error")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
 
 
 @app.get("/sample-zip")
