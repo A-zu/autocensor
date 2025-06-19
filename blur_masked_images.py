@@ -118,13 +118,8 @@ def blur_mask(mask: torch.Tensor, image: np.ndarray, blurred_image: np.ndarray) 
     # binary 0/255
     mask_np = (mask.cpu().numpy().astype(np.uint8)) * 255
 
-    # resize to image dims if needed
-    mask_resized = cv2.resize(
-        mask_np, (image.shape[1], image.shape[0]), interpolation=cv2.INTER_NEAREST
-    )
-
     # expand to 3 channels
-    mask_3ch = cv2.merge([mask_resized] * 3)
+    mask_3ch = cv2.merge([mask_np] * 3)
 
     # in-place blend
     image[mask_3ch == 255] = blurred_image[mask_3ch == 255]
