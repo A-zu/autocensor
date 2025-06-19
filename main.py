@@ -22,10 +22,10 @@ from blur_masked_images import process_file
 
 logger = logging.getLogger(__name__)
 
-HOST = os.getenv("HOST") or "0.0.0.0"
-PORT = os.getenv("PORT") or 8000
-OLLAMA_MODEL = os.getenv("OLLAMA_MODEL") or "qwen3:4b"
-YOLOE_MODEL = os.getenv("YOLOE_MODEL") or "yoloe-v8l-seg.pt"
+HOST = os.getenv("HOST", "0.0.0.0")
+PORT = os.getenv("PORT", "8000")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b")
+YOLOE_MODEL = os.getenv("YOLOE_MODEL", "yoloe-v8l-seg.pt")
 
 app = FastAPI()
 
@@ -233,7 +233,7 @@ if __name__ == "__main__":
         logger = logging.getLogger("startup")
 
         logger.info("Downloading YOLO model...")
-        YOLOE(YOLOE_MODEL)
+        YOLOE(YOLOE_MODEL).get_text_pe("0")
         logger.info("YOLO model download complete.")
 
         logger.info("Starting Ollama model download...")

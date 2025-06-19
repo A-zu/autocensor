@@ -16,7 +16,7 @@ from ultralytics.engine.results import Results
 
 logger = logging.getLogger(__name__)
 
-YOLO_BATCH_SIZE = os.getenv("YOLO_BATCH_SIZE") or 8
+YOLO_BATCH_SIZE = os.getenv("YOLO_BATCH_SIZE", "8")
 
 
 class VideoWriterContext:
