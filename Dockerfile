@@ -5,7 +5,7 @@ WORKDIR /app
 
 # System dependencies for building (if needed)
 RUN apt-get update && \
-    apt-get install -y python3-opencv git && \
+    apt-get install -y python3-opencv git ffmpeg && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
@@ -30,7 +30,7 @@ WORKDIR /app
 
 # System-level runtime dependency only (OpenCV)
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3-opencv && \
+    apt-get install -y --no-install-recommends python3-opencv ffmpeg && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Copy installed Python packages and source code from builder
