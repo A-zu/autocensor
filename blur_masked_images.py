@@ -16,7 +16,7 @@ from ultralytics.engine.results import Results
 
 logger = logging.getLogger(__name__)
 
-YOLO_BATCH_SIZE = os.getenv("YOLO_BATCH_SIZE", "8")
+YOLO_BATCH_SIZE = os.getenv("YOLO_BATCH_SIZE", "16")
 
 
 class VideoWriterContext:
@@ -296,26 +296,25 @@ def process_images(
     Returns:
         Total number of frames processed.
     """
-    with FrameTimeLogger("Detection") as timer:
+    with FrameTimeLogger("Processing") as timer:
         try:
             results = model.predict(
                 input_dir,
                 verbose=verbose,
                 batch=int(YOLO_BATCH_SIZE),
                 retina_masks=True,
+                stream=True,
                 show_labels=False,
                 show_conf=False,
                 show_boxes=False,
             )
-            total_frames = len(results)
+            images, videos = process_results(results, coefficient=blur_intensity)
+            total_frames = len(images) + sum(len(frames) for frames in videos.values())
             timer.set_count(total_frames)
 
         except FileNotFoundError as e:
             logger.debug(str(e))
             return
-
-    with FrameTimeLogger("Blurring", total_frames):
-        images, videos = process_results(results, coefficient=blur_intensity)
 
     if images:
         with FrameTimeLogger("Saving images", len(images)):
