@@ -3,19 +3,23 @@ FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS builder
 
 WORKDIR /app
 
-# System dependencies for building (if needed)
+# System dependencies for building
 RUN apt-get update && \
-    apt-get install -y python3-opencv git ffmpeg && \
+    apt-get install -y git && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Install Python dependencies
-COPY pyproject.toml .
-RUN uv sync
+RUN --mount=type=cache,target=/root/.cache/uv \
+    --mount=type=bind,source=uv.lock,target=uv.lock \
+    --mount=type=bind,source=pyproject.toml,target=pyproject.toml \
+    uv sync --locked --no-install-project
 
 # Copy source code
+COPY uv.lock .
 COPY main.py .
 COPY chat.py .
 COPY redact.py .
+COPY pyproject.toml .
 COPY blur_prompt.txt .
 COPY logging_config.py .
 COPY redact_prompt.txt .
@@ -23,12 +27,15 @@ COPY blur_masked_images.py .
 COPY colorlog_formatter.py .
 COPY static/ static/
 
+RUN --mount=type=cache,target=/root/.cache/uv \
+    uv sync --locked
+
 # === Final Runtime Stage ===
 FROM ghcr.io/astral-sh/uv:python3.13-bookworm-slim AS final
 
 WORKDIR /app
 
-# System-level runtime dependency only (OpenCV)
+# System-level runtime dependency only
 RUN apt-get update && \
     apt-get install -y --no-install-recommends python3-opencv ffmpeg && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
