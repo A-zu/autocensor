@@ -352,10 +352,11 @@ def process_images(
     """
     with FrameTimeLogger("Processing") as timer:
         try:
+            batch = int(YOLO_BATCH_SIZE)
             results = model.predict(
                 input_dir,
                 verbose=verbose,
-                batch=int(YOLO_BATCH_SIZE),
+                batch=batch,
                 retina_masks=True,
                 stream=True,
                 show_labels=False,
@@ -387,7 +388,7 @@ def process_images(
 def process_directory(
     input_dir: Path,
     output_dir: Path,
-    selected_items: List[str],
+    classes: List[str],
     blur_intensity: float,
     model_name: str,
 ) -> None:
@@ -398,10 +399,9 @@ def process_directory(
     Args:
         input_dir: folder with extracted images.
         output_dir: folder to receive processed subfolders.
-        selected_items: items for class selection.
+        classes: items for class selection.
     """
     model = YOLOE(model_name)
-    classes = selected_items
     model.set_classes(classes, model.get_text_pe(classes))
 
     with FrameTimeLogger(f"Processing directory — '{input_dir.name}'") as timer:
