@@ -54,8 +54,9 @@ class VideoCaptureContext:
 
 
 class FrameTimeLogger:
-    def __init__(self, label: str, count: int = None):
+    def __init__(self, label: str, count: int = None, *, level: str = "INFO"):
         self.label = label
+        self.level = getattr(logging, level.upper(), logging.INFO)
         self.count = count
 
     def set_count(self, count: int):
@@ -70,12 +71,13 @@ class FrameTimeLogger:
         if self.count:
             avg = duration / self.count
             fps = self.count / duration
-            logger.info(
+            logger.log(
+                self.level,
                 f"{self.label:<20} — {self.count:>4} frames in {duration:>5.2f}s "
-                f"(avg: {avg:.4f}s, {fps:.2f} FPS)"
+                f"(avg: {avg:.4f}s, {fps:.2f} FPS)",
             )
         else:
-            logger.info(f"{self.label} took {duration:.2f}s")
+            logger.log(self.level, f"{self.label} took {duration:.2f}s")
 
 
 def get_kernel(
@@ -296,8 +298,6 @@ def save_videos(
         logger.debug(f"Writing {dest.name} ({len(frames)} frames @ {fps:.2f} FPS)")
 
         try:
-            start = time.perf_counter()
-
             video_input = ffmpeg.input(
                 "pipe:",
                 format="rawvideo",
@@ -310,25 +310,24 @@ def save_videos(
 
             process = video_input.output(
                 audio_input,
-                str(dest),
+                map="1:a:0",
+                acodec="copy",
                 vcodec="libx264",
                 pix_fmt="yuv420p",
-                acodec="aac",
-                map="1:a:0",
-                shortest=None,
+                threads=0,
+                filename=str(dest),
                 loglevel="quiet",
+                shortest=None,
             ).run_async(pipe_stdin=True, overwrite_output=True)
 
-            for frame in frames:
-                process.stdin.write(frame.tobytes())
+            with FrameTimeLogger(
+                f"Saved video {dest.name}", level="DEBUG", count=len(frames)
+            ):
+                for frame in frames:
+                    process.stdin.write(frame.tobytes())
 
-            process.stdin.close()
-            process.wait()
-
-            elapsed = time.perf_counter() - start
-            logger.debug(
-                f"Saved video {dest.name} ({len(frames)} frames @ {fps:.2f} FPS) in {elapsed:.2f}s"
-            )
+                process.stdin.close()
+                process.wait()
 
         except Exception:
             logger.exception(f"Failed to write video {dest}")
