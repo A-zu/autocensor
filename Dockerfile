@@ -37,7 +37,7 @@ WORKDIR /app
 
 # System-level runtime dependency only
 RUN apt-get update && \
-    apt-get install -y --no-install-recommends python3-opencv ffmpeg && \
+    apt-get install -y --no-install-recommends ffmpeg && \
     apt-get clean && rm -rf /var/lib/apt/lists/*
 
 # Copy installed Python packages and source code from builder
@@ -50,7 +50,9 @@ ENV HOST=0.0.0.0 \
     OLLAMA_MODEL=qwen3:4b \
     YOLOE_MODEL=yoloe-v8l-seg.pt \
     YOLO_CONFIG_DIR=/yolo/config \
-    YOLO_BATCH_SIZE=16
+    YOLO_BATCH_SIZE=16 \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,video,utility
 
 # Start the app
 CMD ["uv", "run", "main.py"]
