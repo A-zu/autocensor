@@ -102,13 +102,6 @@ def get_kernel(
     return (k, k)
 
 
-def add_gaussian_noise(image, mean=0, std=5):
-    noise = np.random.normal(mean, std, image.shape).astype(np.float32)
-    np.add(image.astype(np.float32), noise, out=noise)
-    np.clip(noise, 0, 255, out=noise)
-    image[:] = noise.astype(np.uint8)
-
-
 def blur_image_copy(
     image: np.ndarray, *, coefficient: float = 0.5, max_fraction: float = 0.05
 ) -> np.ndarray:
@@ -129,8 +122,6 @@ def blur_image_copy(
     target_h = 640
     new_w = int(w / h * target_h)
     resized = cv2.resize(image, (new_w, target_h))
-
-    add_gaussian_noise(resized)
 
     kernel = get_kernel(resized, coefficient=coefficient, max_fraction=max_fraction)
     blurred = cv2.GaussianBlur(resized, kernel, 0)
