@@ -334,6 +334,52 @@ def save_video(frames: List[np.ndarray], video_path: Path, output_dir: Path) -> 
         logger.exception(f"Failed to write video {dest}")
 
 
+def consume_and_save(
+    results_iter: Iterator[Tuple[Path, np.ndarray, bool]],
+    output_dir: Path,
+) -> int:
+    """
+    Consume a stream of processed frames, saving images immediately
+    and collecting/saving video frames in sequence.
+
+    Args:
+        results_iter (Iterator[Tuple[Path, np.ndarray, bool]]):
+            An iterator yielding (path, frame, is_video) for each processed frame.
+        output_dir (Path):
+            Directory under which to save images (.jpg) and videos (.mp4).
+
+    Returns:
+        int: Total number of frames (images + video frames) saved.
+    """
+    total_frames = 0
+    last_path: Path = None
+    video_buffer: List[np.ndarray] = []
+
+    for path, frame, is_video in results_iter:
+        if is_video:
+            # Switched to a new video?
+            if last_path is not None and path != last_path and video_buffer:
+                # Flush the previous video
+                total_frames += len(video_buffer)
+                save_video(video_buffer, last_path, output_dir)
+                video_buffer = [frame]
+            else:
+                video_buffer.append(frame)
+            last_path = path
+
+        else:
+            # Standalone image
+            total_frames += 1
+            save_image(frame, path, output_dir)
+
+    # Flush any remaining video frames
+    if video_buffer and last_path is not None:
+        total_frames += len(video_buffer)
+        save_video(video_buffer, last_path, output_dir)
+
+    return total_frames
+
+
 def process_images(
     model: YOLOE,
     input_dir: Path,
@@ -364,31 +410,8 @@ def process_images(
                 model, input_dir, executor, blur_intensity, verbose
             )
 
-        last_path = Path()
-        total_frames = 0
-        video_buffer = []
-
         with FrameTimeLogger("Saving frames") as timer:
-            for path, frame, is_video in results_iter:
-                if is_video:
-                    if path != last_path and video_buffer:
-                        total_frames += len(video_buffer)
-                        save_video(video_buffer, last_path, output_dir)
-                        video_buffer = [frame]
-
-                    else:
-                        video_buffer.append(frame)
-
-                    last_path = path
-
-                else:
-                    total_frames += 1
-                    save_image(frame, path, output_dir)
-
-            if video_buffer:
-                total_frames += len(video_buffer)
-                save_video(video_buffer, last_path, output_dir)
-
+            total_frames = consume_and_save(results_iter, output_dir)
             timer.set_count(total_frames)
 
     return total_frames
