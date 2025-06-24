@@ -13,6 +13,20 @@
             "env": {
                 "DEBUG_MODE": "1"
             }
+        },
+        {
+            "name": "Benchmark: Process Files",
+            "type": "debugpy",
+            "request": "launch",
+            "module": "uv",
+            "args": [
+                "run",
+                "pytest",
+                "benchmarks/",
+                "--benchmark-only",
+                "--benchmark-time-unit=s"
+            ],
+            "console": "integratedTerminal"
         }
     ]
 }

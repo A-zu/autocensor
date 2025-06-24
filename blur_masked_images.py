@@ -1,5 +1,6 @@
 import os
 import time
+import shutil
 import logging
 import zipfile
 import tempfile
@@ -510,7 +511,7 @@ def process_file(
                 else:
                     output_path = output_path.with_suffix(".jpg")
 
-                uploaded_file_path.rename(orig / uploaded_file_path.name)
+                shutil.copy2(uploaded_file_path, orig / uploaded_file_path.name)
                 process_directory(
                     orig, output_dir, selected_items, blur_intensity, model_name
                 )
@@ -519,7 +520,6 @@ def process_file(
             else:
                 logger.debug("Detected zip archive, extracting and processing folder")
                 extract_zip(uploaded_file_path, orig)
-                uploaded_file_path.unlink()
                 process_directory(
                     orig, proc, selected_items, blur_intensity, model_name
                 )
