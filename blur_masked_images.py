@@ -17,7 +17,7 @@ from ultralytics.engine.results import Results
 
 logger = logging.getLogger(__name__)
 
-YOLO_BATCH_SIZE = os.getenv("YOLO_BATCH_SIZE") or 8
+YOLO_BATCH_SIZE = os.getenv("YOLO_BATCH_SIZE", "16")
 
 
 class VideoWriterContext:
@@ -297,26 +297,25 @@ def process_images(
     Returns:
         Total number of frames processed.
     """
-    with FrameTimeLogger("Detection") as timer:
+    with FrameTimeLogger("Processing") as timer:
         try:
             results = model.predict(
                 input_dir,
                 verbose=verbose,
                 batch=int(YOLO_BATCH_SIZE),
                 retina_masks=True,
+                stream=True,
                 show_labels=False,
                 show_conf=False,
                 show_boxes=False,
             )
-            total_frames = len(results)
+            images, videos = process_results(results, coefficient=blur_intensity)
+            total_frames = len(images) + sum(len(frames) for frames in videos.values())
             timer.set_count(total_frames)
 
         except FileNotFoundError as e:
             logger.debug(str(e))
             return
-
-    with FrameTimeLogger("Blurring", total_frames):
-        images, videos = process_results(results, coefficient=blur_intensity)
 
     if images:
         with FrameTimeLogger("Saving images", len(images)):
@@ -412,27 +411,34 @@ def process_file(
     """
     output_path = output_dir / uploaded_file_path.name
 
-    with tempfile.TemporaryDirectory() as tmp:
-        tmp_path = Path(tmp)
-        orig = tmp_path / "original"
-        proc = tmp_path / "processed"
-        orig.mkdir()
-        proc.mkdir()
+    try:
+        with tempfile.TemporaryDirectory() as tmp:
+            tmp_path = Path(tmp)
+            orig = tmp_path / "original"
+            proc = tmp_path / "processed"
+            orig.mkdir()
+            proc.mkdir()
 
-        if uploaded_file_path.suffix != ".zip":
-            suffix = uploaded_file_path.suffix[1:].lower()
-            if suffix in VID_FORMATS:
-                output_path = output_path.with_suffix(".mp4")
+            if uploaded_file_path.suffix != ".zip":
+                suffix = uploaded_file_path.suffix[1:].lower()
+                if suffix in VID_FORMATS:
+                    output_path = output_path.with_suffix(".mp4")
+                else:
+                    output_path = output_path.with_suffix(".jpg")
+
+                shutil.copy2(uploaded_file_path, orig / uploaded_file_path.name)
+                process_directory(
+                    orig, output_dir, selected_items, blur_intensity, model_name
+                )
+
             else:
-                output_path = output_path.with_suffix(".jpg")
+                extract_zip(uploaded_file_path, orig)
+                process_directory(
+                    orig, proc, selected_items, blur_intensity, model_name
+                )
+                create_processed_zip(output_path, proc)
 
-            shutil.copy2(uploaded_file_path, orig / uploaded_file_path.name)
-            process_directory(
-                orig, output_dir, selected_items, blur_intensity, model_name
-            )
-        else:
-            extract_zip(uploaded_file_path, orig)
-            process_directory(orig, proc, selected_items, blur_intensity, model_name)
-            create_processed_zip(output_path, proc)
+    finally:
+        torch.cuda.empty_cache()
 
     return output_path
