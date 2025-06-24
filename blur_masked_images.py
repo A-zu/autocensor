@@ -1,13 +1,11 @@
 import os
-import threading
 import time
 import shutil
 import logging
 import zipfile
 import tempfile
-from typing import Dict, List, Tuple
+from typing import Iterator, List, Tuple
 from pathlib import Path
-from collections import defaultdict
 from concurrent.futures import ThreadPoolExecutor
 
 import cv2
@@ -55,8 +53,9 @@ class VideoCaptureContext:
 
 
 class FrameTimeLogger:
-    def __init__(self, label: str, count: int = None):
+    def __init__(self, label: str, count: int = None, *, level: str = "INFO"):
         self.label = label
+        self.level = getattr(logging, level.upper(), logging.INFO)
         self.count = count
 
     def set_count(self, count: int):
@@ -71,12 +70,13 @@ class FrameTimeLogger:
         if self.count:
             avg = duration / self.count
             fps = self.count / duration
-            logger.info(
+            logger.log(
+                self.level,
                 f"{self.label:<20} — {self.count:>4} frames in {duration:>5.2f}s "
-                f"(avg: {avg:.4f}s, {fps:.2f} FPS)"
+                f"(avg: {avg:.4f}s, {fps:.2f} FPS)",
             )
         else:
-            logger.info(f"{self.label} took {duration:.2f}s")
+            logger.log(self.level, f"{self.label} took {duration:.2f}s")
 
 
 def get_kernel(
@@ -188,142 +188,188 @@ def process_result(
 
 
 def process_results_threaded(
-    results: List[Results], *, coefficient: float = 0.5, max_fraction: float = 0.05
-) -> Tuple[Dict[Path, np.ndarray], Dict[Path, List[np.ndarray]]]:
+    model: YOLOE,
+    input_dir: Path,
+    executor: ThreadPoolExecutor,
+    blur_intensity: float,
+    verbose: bool = True,
+) -> Iterator[Tuple[Path, np.ndarray, bool]]:
     """
-    Concurrently process multiple YOLO prediction results using threads,
-    applying blur to masked regions and organizing output by media type.
+    Run YOLO predictions on all media in `input_dir`, blur masks, and yield
+    each processed frame as soon as it's ready.
 
     Args:
-        results (List[Results]): List of YOLO `Results` objects from image or video inputs.
-        coefficient (float): Blur strength between 0.0 and 1.0.
-        max_fraction (float): Maximum kernel size as a fraction of image dimensions.
+        model (YOLOE): Initialized YOLO model for detection.
+        input_dir (Path): Directory containing images/videos to process.
+        executor (ThreadPoolExecutor): Executor on which to dispatch frame blurring.
+        blur_intensity (float): Strength of blur to apply to masked regions.
+        verbose (bool): If True, print model.predict progress.
 
     Returns:
-        Tuple[
-            Dict[Path, np.ndarray],
-            Dict[Path, List[np.ndarray]]
-        ]:
-            - Dictionary mapping image paths to their processed image arrays.
-            - Dictionary mapping video paths to lists of processed frame arrays.
+        Iterator[Tuple[Path, np.ndarray, bool]]:
+            Yields a tuple for each frame:
+            - Path: original media path (image or video file).
+            - np.ndarray: the blurred (or unmodified) frame array (BGR).
+            - bool: True if this frame came from a video, False for standalone images.
     """
+    results_iter = iter([])
 
-    images = {}
-    videos = defaultdict(list)
-    lock = threading.Lock()
-
-    with ThreadPoolExecutor() as executor:
+    try:
+        batch = int(YOLO_BATCH_SIZE)
+        results = model.predict(
+            input_dir,
+            verbose=verbose,
+            batch=batch,
+            retina_masks=True,
+            stream=True,
+            show_labels=False,
+            show_conf=False,
+            show_boxes=False,
+        )
         results_iter = executor.map(
-            lambda result: process_result(result, coefficient, max_fraction), results
+            lambda result: process_result(result, blur_intensity), results
         )
 
-        for path, image, is_video in results_iter:
-            with lock:
-                if is_video:
-                    videos[path].append(image)
+    except FileNotFoundError as e:
+        logger.debug(str(e))
 
-                else:
-                    images[path] = image
-
-    return images, videos
+    return results_iter
 
 
-def save_images(
-    images: Dict[Path, np.ndarray], root_dir: Path, output_dir: Path
-) -> None:
+def save_image(image: np.ndarray, image_path: Path, output_dir: Path) -> None:
     """
-    Save processed images to disk, preserving relative paths.
+    Save a single processed image frame to JPEG, preserving its filename.
 
     Args:
-        images: Dictionary mapping input paths to image arrays.
-        root_dir: Root of original input directory structure.
-        output_dir: Destination directory to save processed images.
+        image (np.ndarray): BGR image array to save.
+        image_path (Path): Original input image path.
+        output_dir (Path): Root directory in which to write the JPEG.
     """
-    for image_path, image in images.items():
-        if image is None:
-            logger.warning(f"No frame to write for image: {image_path=}")
-            continue
+    if image is None:
+        logger.warning(f"No frame to write for image: {image_path=}")
+        return
 
-        rel = image_path.relative_to(root_dir)
-        dest = output_dir / rel.with_suffix(".jpg")
-        dest.parent.mkdir(parents=True, exist_ok=True)
+    dest = output_dir / image_path.name
+    dest = dest.with_suffix(".jpg")
+    dest.parent.mkdir(parents=True, exist_ok=True)
 
-        # save as JPEG at quality=90
-        cv2.imwrite(str(dest), image, [cv2.IMWRITE_JPEG_QUALITY, 90])
-        logger.debug(f"Saved image: {dest=}")
+    # save as JPEG at quality=90
+    cv2.imwrite(str(dest), image, [cv2.IMWRITE_JPEG_QUALITY, 90])
+    logger.debug(f"Saved image: {dest=}")
 
 
-def save_videos(
-    videos: Dict[Path, List[np.ndarray]], root_dir: Path, output_dir: Path
-) -> None:
+def save_video(frames: List[np.ndarray], video_path: Path, output_dir: Path) -> None:
     """
-    Save processed video frames to disk as MP4 files.
+    Encode and save a list of processed frames as an MP4, copying original audio.
 
     Args:
-        videos: Dictionary mapping video paths to lists of frame arrays.
-        root_dir: Root of original input directory structure.
-        output_dir: Destination directory to save processed videos.
+        frames (List[np.ndarray]): In-memory BGR frames for one video.
+        video_path (Path): Original video file path (for audio & metadata).
+        output_dir (Path): Directory in which to write the .mp4.
     """
-    for video_path, frames in videos.items():
-        if not frames:
-            logger.warning(f"No frames to write for video: {video_path=}")
-            continue
+    if not frames:
+        logger.warning(f"No frames to write for video: {video_path=}")
+        return
 
-        if any(frame.shape != frames[0].shape for frame in frames):
-            logger.error(f"Inconsistent frame shapes in video: {video_path=}")
-            continue
+    if any(frame.shape != frames[0].shape for frame in frames):
+        logger.error(f"Inconsistent frame shapes in video: {video_path=}")
+        return
 
-        rel = video_path.relative_to(root_dir)
-        dest = output_dir / rel.with_suffix(".mp4")
-        dest.parent.mkdir(parents=True, exist_ok=True)
+    dest = output_dir / video_path.name
+    dest = dest.with_suffix(".mp4")
+    dest.parent.mkdir(parents=True, exist_ok=True)
 
-        with VideoCaptureContext(video_path) as cap:
-            fps = cap.get(cv2.CAP_PROP_FPS)
+    with VideoCaptureContext(video_path) as cap:
+        fps = cap.get(cv2.CAP_PROP_FPS)
 
-        if not fps or fps < 1:
-            fps = 30.0
-            logger.warning(f"Invalid FPS from {video_path=}, defaulting to 30.0")
+    if not fps or fps < 1:
+        fps = 30.0
+        logger.warning(f"Invalid FPS from {video_path=}, defaulting to 30.0")
 
-        h, w = frames[0].shape[:2]
-        logger.debug(f"Writing {dest.name} ({len(frames)} frames @ {fps:.2f} FPS)")
+    h, w = frames[0].shape[:2]
+    logger.debug(f"Writing {dest.name} ({len(frames)} frames @ {fps:.2f} FPS)")
 
-        try:
-            start = time.perf_counter()
+    try:
+        video_input = ffmpeg.input(
+            "pipe:",
+            format="rawvideo",
+            pix_fmt="bgr24",
+            s=f"{w}x{h}",
+            framerate=fps,
+        )
 
-            video_input = ffmpeg.input(
-                "pipe:",
-                format="rawvideo",
-                pix_fmt="bgr24",
-                s=f"{w}x{h}",
-                framerate=fps,
-            )
+        audio_input = ffmpeg.input(str(video_path), vn=None).audio
 
-            audio_input = ffmpeg.input(str(video_path), vn=None).audio
+        process = video_input.output(
+            audio_input,
+            map="1:a:0",
+            acodec="copy",
+            vcodec="h264_nvenc",
+            preset="p4",
+            pix_fmt="yuv420p",
+            threads=0,
+            filename=str(dest),
+            loglevel="quiet",
+            shortest=None,
+        ).run_async(pipe_stdin=True, overwrite_output=True)
 
-            process = video_input.output(
-                audio_input,
-                str(dest),
-                vcodec="libx264",
-                pix_fmt="yuv420p",
-                acodec="aac",
-                map="1:a:0",
-                shortest=None,
-                loglevel="quiet",
-            ).run_async(pipe_stdin=True, overwrite_output=True)
-
+        with FrameTimeLogger(
+            f"Saved video {dest.name}", level="DEBUG", count=len(frames)
+        ):
             for frame in frames:
                 process.stdin.write(frame.tobytes())
 
             process.stdin.close()
             process.wait()
 
-            elapsed = time.perf_counter() - start
-            logger.debug(
-                f"Saved video {dest.name} ({len(frames)} frames @ {fps:.2f} FPS) in {elapsed:.2f}s"
-            )
+    except Exception:
+        logger.exception(f"Failed to write video {dest}")
 
-        except Exception:
-            logger.exception(f"Failed to write video {dest}")
+
+def consume_and_save(
+    results_iter: Iterator[Tuple[Path, np.ndarray, bool]],
+    output_dir: Path,
+) -> int:
+    """
+    Consume a stream of processed frames, saving images immediately
+    and collecting/saving video frames in sequence.
+
+    Args:
+        results_iter (Iterator[Tuple[Path, np.ndarray, bool]]):
+            An iterator yielding (path, frame, is_video) for each processed frame.
+        output_dir (Path):
+            Directory under which to save images (.jpg) and videos (.mp4).
+
+    Returns:
+        int: Total number of frames (images + video frames) saved.
+    """
+    total_frames = 0
+    last_path: Path = None
+    video_buffer: List[np.ndarray] = []
+
+    for path, frame, is_video in results_iter:
+        if is_video:
+            # Switched to a new video?
+            if last_path is not None and path != last_path and video_buffer:
+                # Flush the previous video
+                total_frames += len(video_buffer)
+                save_video(video_buffer, last_path, output_dir)
+                video_buffer = [frame]
+            else:
+                video_buffer.append(frame)
+            last_path = path
+
+        else:
+            # Standalone image
+            total_frames += 1
+            save_image(frame, path, output_dir)
+
+    # Flush any remaining video frames
+    if video_buffer and last_path is not None:
+        total_frames += len(video_buffer)
+        save_video(video_buffer, last_path, output_dir)
+
+    return total_frames
 
 
 def process_images(
@@ -334,53 +380,31 @@ def process_images(
     verbose: bool = True,
 ) -> int:
     """
-    End-to-end image and video processing for a given directory.
+    Full pipeline: detect, blur, and save both images and videos under `input_dir`.
 
-    This function:
-      - Runs detection on all frames.
-      - Applies blur to masked regions.
-      - Saves processed images and video outputs.
+    1. Runs YOLO on every file in `input_dir` (images & videos).
+    2. Blurs detected mask regions frame-by-frame.
+    3. Saves images as JPEGs and videos as MP4 (with copied audio).
 
     Args:
-        model: YOLOE model used for prediction.
-        input_dir: Folder with images/videos to process.
-        output_dir: Folder to write processed files.
-        blur_intensity: Blur strength passed to blurring function.
-        verbose: Whether to print model.predict logs.
+        model (YOLOE): YOLO model instance for prediction.
+        input_dir (Path): Directory containing source images/videos.
+        output_dir (Path): Directory to write processed outputs.
+        blur_intensity (float): Blur strength for masked regions.
+        verbose (bool): If True, show YOLO predict progress.
 
     Returns:
-        Total number of frames processed.
+        int: Total number of frames (images + video frames) that were saved.
     """
-    with FrameTimeLogger("Processing") as timer:
-        try:
-            results = model.predict(
-                input_dir,
-                verbose=verbose,
-                batch=int(YOLO_BATCH_SIZE),
-                retina_masks=True,
-                stream=True,
-                show_labels=False,
-                show_conf=False,
-                show_boxes=False,
+    with ThreadPoolExecutor() as executor:
+        with FrameTimeLogger("Processing") as timer:
+            results_iter = process_results_threaded(
+                model, input_dir, executor, blur_intensity, verbose
             )
 
-            images, videos = process_results_threaded(
-                results, coefficient=blur_intensity
-            )
-            total_frames = len(images) + sum(len(frames) for frames in videos.values())
+        with FrameTimeLogger("Saving frames") as timer:
+            total_frames = consume_and_save(results_iter, output_dir)
             timer.set_count(total_frames)
-
-        except FileNotFoundError as e:
-            logger.debug(str(e))
-            return
-
-    if images:
-        with FrameTimeLogger("Saving images", len(images)):
-            save_images(images, input_dir, output_dir)
-
-    if videos:
-        with FrameTimeLogger("Saving videos", total_frames - len(images)):
-            save_videos(videos, input_dir, output_dir)
 
     return total_frames
 
@@ -388,7 +412,7 @@ def process_images(
 def process_directory(
     input_dir: Path,
     output_dir: Path,
-    selected_items: List[str],
+    classes: List[str],
     blur_intensity: float,
     model_name: str,
 ) -> None:
@@ -399,10 +423,9 @@ def process_directory(
     Args:
         input_dir: folder with extracted images.
         output_dir: folder to receive processed subfolders.
-        selected_items: items for class selection.
+        classes: items for class selection.
     """
     model = YOLOE(model_name)
-    classes = selected_items
     model.set_classes(classes, model.get_text_pe(classes))
 
     with FrameTimeLogger(f"Processing directory — '{input_dir.name}'") as timer:
