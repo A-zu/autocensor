@@ -1,4 +1,5 @@
 import os
+import threading
 import time
 import shutil
 import logging
@@ -7,6 +8,7 @@ import tempfile
 from typing import Dict, List, Tuple
 from pathlib import Path
 from collections import defaultdict
+from concurrent.futures import ThreadPoolExecutor
 
 import cv2
 import torch
@@ -106,7 +108,7 @@ def blur_image_copy(
 ) -> np.ndarray:
     """
     Return a fully blurred copy of `image`, with blur scaled
-    by `coefficient` at a working height of 1080 px.
+    by `coefficient` at a working height of 640 px.
 
     Args:
         image: BGR numpy array.
@@ -116,17 +118,15 @@ def blur_image_copy(
     Returns:
         A new numpy array, same shape as `image`, blurred.
     """
-    # remember original
     h, w = image.shape[:2]
 
-    # scale to height=1080 (preserve aspect)
     target_h = 640
     new_w = int(w / h * target_h)
     resized = cv2.resize(image, (new_w, target_h))
 
-    # blur & back-resize
     kernel = get_kernel(resized, coefficient=coefficient, max_fraction=max_fraction)
     blurred = cv2.GaussianBlur(resized, kernel, 0)
+
     return cv2.resize(blurred, (w, h))
 
 
@@ -152,45 +152,78 @@ def blur_mask(mask: torch.Tensor, image: np.ndarray, blurred_image: np.ndarray) 
     image[mask_3ch == 255] = blurred_image[mask_3ch == 255]
 
 
-def process_results(
+def process_result(
+    result: Results, coefficient: float = 0.5, max_fraction: float = 0.05
+) -> Tuple[Path, np.ndarray, bool]:
+    """
+    Process a single YOLO prediction result by applying blur to detected mask regions.
+
+    Args:
+        result (Results): A YOLO `Results` object containing image, path, and masks.
+        coefficient (float): Blur strength between 0.0 and 1.0.
+        max_fraction (float): Maximum kernel size as a fraction of image dimensions.
+
+    Returns:
+        Tuple[Path, np.ndarray, bool]:
+            - Image or video path as a `Path` object.
+            - Processed image as a NumPy array (blurred where masked).
+            - Boolean indicating whether the input was a video frame.
+    """
+    image = result.orig_img.copy()
+
+    if result.masks:
+        try:
+            blurred_image = blur_image_copy(
+                image, coefficient=coefficient, max_fraction=max_fraction
+            )
+            combined_mask = torch.any(result.masks.data > 0.5, dim=0)
+            blur_mask(combined_mask, image, blurred_image)
+
+        except Exception:
+            logger.exception("Error during mask processing and blurring")
+
+    path = Path(result.path)
+    is_video = path.suffix[1:].lower() in VID_FORMATS
+    return path, image, is_video
+
+
+def process_results_threaded(
     results: List[Results], *, coefficient: float = 0.5, max_fraction: float = 0.05
 ) -> Tuple[Dict[Path, np.ndarray], Dict[Path, List[np.ndarray]]]:
     """
-    Process YOLO model prediction results to blur masked regions in each image.
+    Concurrently process multiple YOLO prediction results using threads,
+    applying blur to masked regions and organizing output by media type.
 
     Args:
-        results: List of YOLO `Results` objects.
-        coefficient: Strength of blur to apply [0.0–1.0].
-        max_fraction: Maximum blur kernel size as a fraction of image size.
+        results (List[Results]): List of YOLO `Results` objects from image or video inputs.
+        coefficient (float): Blur strength between 0.0 and 1.0.
+        max_fraction (float): Maximum kernel size as a fraction of image dimensions.
 
     Returns:
-        A tuple of:
-            - Dictionary mapping image paths to processed image arrays.
+        Tuple[
+            Dict[Path, np.ndarray],
+            Dict[Path, List[np.ndarray]]
+        ]:
+            - Dictionary mapping image paths to their processed image arrays.
             - Dictionary mapping video paths to lists of processed frame arrays.
     """
+
     images = {}
     videos = defaultdict(list)
+    lock = threading.Lock()
 
-    for result in results:
-        image = result.orig_img.copy()
+    with ThreadPoolExecutor() as executor:
+        results_iter = executor.map(
+            lambda result: process_result(result, coefficient, max_fraction), results
+        )
 
-        if result.masks:
-            try:
-                blurred_image = blur_image_copy(
-                    image, coefficient=coefficient, max_fraction=max_fraction
-                )
-                combined_mask = torch.any(result.masks.data > 0.5, dim=0)
-                blur_mask(combined_mask, image, blurred_image)
+        for path, image, is_video in results_iter:
+            with lock:
+                if is_video:
+                    videos[path].append(image)
 
-            except Exception:
-                logger.exception("Error during mask processing and blurring")
-
-        path = Path(result.path)
-
-        if path.suffix[1:].lower() in VID_FORMATS:
-            videos[path].append(image)
-        else:
-            images[path] = image
+                else:
+                    images[path] = image
 
     return images, videos
 
@@ -330,7 +363,10 @@ def process_images(
                 show_conf=False,
                 show_boxes=False,
             )
-            images, videos = process_results(results, coefficient=blur_intensity)
+
+            images, videos = process_results_threaded(
+                results, coefficient=blur_intensity
+            )
             total_frames = len(images) + sum(len(frames) for frames in videos.values())
             timer.set_count(total_frames)
 
