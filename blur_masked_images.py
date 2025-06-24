@@ -488,6 +488,9 @@ def process_file(
     Returns:
         Path to the final processed file (ZIP, JPG, or MP4).
     """
+    logger.info(
+        f"START process_file: {uploaded_file_path.name}, items={selected_items}, blur={blur_intensity}, model={model_name}"
+    )
     output_path = output_dir / uploaded_file_path.name
 
     try:
@@ -499,9 +502,11 @@ def process_file(
             proc.mkdir()
 
             if uploaded_file_path.suffix != ".zip":
+                logger.debug("Detected single media file, moving to original")
                 suffix = uploaded_file_path.suffix[1:].lower()
                 if suffix in VID_FORMATS:
                     output_path = output_path.with_suffix(".mp4")
+
                 else:
                     output_path = output_path.with_suffix(".jpg")
 
@@ -509,7 +514,10 @@ def process_file(
                 process_directory(
                     orig, output_dir, selected_items, blur_intensity, model_name
                 )
+                logger.info(f"Finished processing chunk, output at {output_path}")
+
             else:
+                logger.debug("Detected zip archive, extracting and processing folder")
                 extract_zip(uploaded_file_path, orig)
                 uploaded_file_path.unlink()
                 process_directory(
@@ -518,6 +526,7 @@ def process_file(
                 create_processed_zip(output_path, proc)
 
     finally:
+        logger.debug("Clearing CUDA cache")
         torch.cuda.empty_cache()
 
     return output_path
