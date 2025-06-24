@@ -10,6 +10,7 @@ from collections import defaultdict
 
 import cv2
 import torch
+import ffmpeg
 import numpy as np
 from ultralytics import YOLOE
 from ultralytics.data.utils import VID_FORMATS
@@ -231,7 +232,7 @@ def save_videos(
         output_dir: Destination directory to save processed videos.
     """
     for video_path, frames in videos.items():
-        if frames is None:
+        if not frames:
             logger.warning(f"No frames to write for video: {video_path=}")
             continue
 
@@ -251,22 +252,42 @@ def save_videos(
             logger.warning(f"Invalid FPS from {video_path=}, defaulting to 30.0")
 
         h, w = frames[0].shape[:2]
-        logger.debug(
-            f"Preparing to write video: {dest} ({len(frames)} frames @ {fps:.2f} FPS)"
-        )
+        logger.debug(f"Writing {dest.name} ({len(frames)} frames @ {fps:.2f} FPS)")
 
         try:
-            fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-            with VideoWriterContext(dest, fourcc, fps, (w, h)) as writer:
-                start = time.perf_counter()
+            start = time.perf_counter()
 
-                for frame in frames:
-                    writer.write(frame)
+            video_input = ffmpeg.input(
+                "pipe:",
+                format="rawvideo",
+                pix_fmt="bgr24",
+                s=f"{w}x{h}",
+                framerate=fps,
+            )
 
-                elapsed = time.perf_counter() - start
-                logger.debug(
-                    f"Saved video: {dest} ({len(frames)} frames @ {fps:.2f} FPS) in {elapsed:.2f}s"
-                )
+            audio_input = ffmpeg.input(str(video_path), vn=None).audio
+
+            process = video_input.output(
+                audio_input,
+                str(dest),
+                vcodec="libx264",
+                pix_fmt="yuv420p",
+                acodec="aac",
+                map="1:a:0",
+                shortest=None,
+                loglevel="quiet",
+            ).run_async(pipe_stdin=True, overwrite_output=True)
+
+            for frame in frames:
+                process.stdin.write(frame.tobytes())
+
+            process.stdin.close()
+            process.wait()
+
+            elapsed = time.perf_counter() - start
+            logger.debug(
+                f"Saved video {dest.name} ({len(frames)} frames @ {fps:.2f} FPS) in {elapsed:.2f}s"
+            )
 
         except Exception:
             logger.exception(f"Failed to write video {dest}")
