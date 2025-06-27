@@ -49,11 +49,37 @@
             <p>📄 Upload a <strong>.pdf file</strong> to redact sensitive information.</p>
           </div>
 
-          <div id="slider-container" class="hidden">
-            <label for="intensity-slider" class="slider-label">Blur Intensity: <span
-                id="intensity-value">50%</span></label>
-            <input type="range" id="intensity-slider" min="0" max="100" value="50" step="1">
+          <!-- Mode selector -->
+          <div id="controls-container" class="hidden">
+            <!-- Mode selector row -->
+            <div class="mode-selector">
+              <input type="radio" name="mode" id="mode-blur" value="blur" checked>
+              <label for="mode-blur">Blur</label>
+
+              <input type="radio" name="mode" id="mode-censor" value="censor">
+              <label for="mode-censor">Censor</label>
+
+              <input type="radio" name="mode" id="mode-detect" value="detect">
+              <label for="mode-detect">Detect</label>
+            </div>
+
+            <div id="slider-container">
+              <div id="threshold-group" class="slider-group">
+                <label for="threshold-slider" class="slider-label">
+                  Confidence Threshold: <span id="threshold-value">25%</span>
+                </label>
+                <input type="range" id="threshold-slider" min="0" max="100" value="25" step="1">
+              </div>
+
+              <div id="blur-group" class="slider-group">
+                <label for="blur-slider" class="slider-label">
+                  Blur Intensity: <span id="blur-value">50%</span>
+                </label>
+                <input type="range" id="blur-slider" min="0" max="100" value="50" step="1">
+              </div>
+            </div>
           </div>
+
 
           <!-- Generic Chat Form (swapped by JS) -->
           <div id="chat-form" class="hidden">

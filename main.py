@@ -108,42 +108,78 @@ async def download_file(background_tasks: BackgroundTasks, file_id: str):
     )
 
 
-@app.post("/blur")
-async def blur_handler(
-    file_id: str = Form(None),
-    prompt: str = Form(None),
-    intensity: float = Form(None),
+@app.post("/media")
+async def media_handler(
+    mode: str = Form(...),
+    prompt: str = Form(...),
+    file_id: str = Form(...),
+    blur_intensity: float = Form(...),
+    confidence_threshold: float = Form(...),
 ):
     """
-    Endpoint to handle image processing.
+    Generic media processing endpoint that handles blurring, censoring, or detection.
+
+    The `mode` parameter controls the operation:
+      - "blur": apply Gaussian blur to masked regions
+      - "censor": fill masked regions with black
+      - "detect": draw bounding boxes and labels only
+
+    Expects a previously uploaded file identifier and a comma-separated list
+    of class names (`prompt`). For "blur" and "censor" modes, at least one class
+    must be specified; for "detect", `prompt` may be empty.
 
     Args:
-        file_id: The file id of the ZIP to process.
+        mode (str): Operation mode; one of "blur", "censor", or "detect".
+        prompt (str): Comma-separated class names to process.
+        file_id (str): Identifier of the uploaded file (must exist under INPUT_DIR).
+        blur_intensity (float): Strength of the blur for "blur" or "censor" modes (0.0 – 1.0).
+        confidence_threshold (float): Minimum detection confidence threshold (0.0 – 1.0).
 
     Returns:
-        JSON response with status and message
+        JSONResponse:
+            status_code=200 and JSON object:
+            {
+                "status": "success",
+                "message": "File processed successfully",
+                "fileId": "<output filename>"
+            }
+
+    Raises:
+        HTTPException(400): Invalid file extension, missing prompt (for blur/censor), or other bad input.
+        HTTPException(404): Uploaded file not found.
+        HTTPException(500): Internal server error during processing.
     """
+    if mode not in ("blur", "censor", "detect"):
+        logger.error("Uploaded file no longer exists")
+        raise HTTPException(400, "Invalid mode")
+
     input_path = INPUT_DIR / file_id
-    selected_items = [item.strip() for item in prompt.split(",") if item.strip()]
-
-    suffix = Path(file_id).suffix[1:].lower()
-    if suffix not in {"zip"} | IMG_FORMATS | VID_FORMATS:
-        logger.error("Only .zip files are allowed")
-        raise HTTPException(status_code=400, detail="Only .zip files are allowed")
-
-    if not selected_items:
-        logger.error("No items were selected")
-        raise HTTPException(status_code=400, detail="No items were selected")
-
     if not input_path.exists():
         logger.error("Uploaded file no longer exists")
-        raise HTTPException(status_code=404, detail="Uploaded file no longer exists")
+        raise HTTPException(404, "Uploaded file no longer exists")
+
+    suffix = input_path.suffix[1:].lower()
+    if suffix not in {"zip"} | IMG_FORMATS | VID_FORMATS:
+        logger.error("Only .zip, image, or video files are allowed")
+        raise HTTPException(400, "Only .zip, image, or video files are allowed")
+
+    selected_items = [item.strip() for item in prompt.split(",") if item.strip()]
+    if not selected_items:
+        logger.error("No items were selected")
+        raise HTTPException(400, "No items were selected")
+
+    model_name = YOLOE_MODEL if selected_items else YOLOE_MODEL.replace(".pt", "-pf.pt")
 
     try:
         output_path = process_file(
-            input_path, OUTPUT_DIR, selected_items, intensity, YOLOE_MODEL
+            mode=mode,
+            model_name=model_name,
+            uploaded_file_path=input_path,
+            output_dir=OUTPUT_DIR,
+            confidence_threshold=confidence_threshold,
+            selected_items=selected_items,
+            blur_intensity=blur_intensity,
         )
-
         return JSONResponse(
             status_code=200,
             content={
@@ -155,11 +191,11 @@ async def blur_handler(
 
     except Exception:
         logger.exception("Internal Server Error")
-        raise HTTPException(status_code=500, detail="Internal Server Error")
+        raise HTTPException(500, "Internal Server Error")
 
 
-@app.post("/redact")
-async def redact_handler(
+@app.post("/document")
+async def document_handler(
     background_tasks: BackgroundTasks, file_id: str = Form(...), prompt: str = Form(...)
 ):
     """
@@ -234,6 +270,7 @@ if __name__ == "__main__":
 
         logger.info("Downloading YOLO model...")
         YOLOE(YOLOE_MODEL).get_text_pe("0")
+        YOLOE(YOLOE_MODEL.replace(".pt", "-pf.pt"))
         logger.info("YOLO model download complete.")
 
         logger.info("Starting Ollama model download...")

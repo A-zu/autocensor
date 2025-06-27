@@ -10,9 +10,12 @@ document.addEventListener("DOMContentLoaded", () => {
   const errorMessage = document.getElementById("error-message");
   const instructionContent = document.getElementById("instruction-content");
 
-  const sliderContainer = document.getElementById("slider-container");
-  const intensitySlider = document.getElementById("intensity-slider");
-  const intensityValue = document.getElementById("intensity-value");
+  const controlsContainer = document.getElementById("controls-container");
+  const blurGroup = document.getElementById("blur-group");
+  const blurValue = document.getElementById("blur-value");
+  const blurSlider = document.getElementById("blur-slider");
+  const thresholdValue = document.getElementById("threshold-value");
+  const thresholdSlider = document.getElementById("threshold-slider");
   const chatForm = document.getElementById("chat-form");
   const formTitle = document.getElementById("form-title");
   const chatInput = document.getElementById("chat-input");
@@ -67,8 +70,8 @@ document.addEventListener("DOMContentLoaded", () => {
     root = "";
   }
   const uploadEndpoint = `${root}/upload`;
-  const blurEndpoint = `${root}/blur`;
-  const redactEndpoint = `${root}/redact`;
+  const mediaEndpoint = `${root}/media`;
+  const documentEndpoint = `${root}/document`;
   const downloadEndpoint = `${root}/download`;
   const sampleZipEndpoint = `${root}/sample-zip`;
   const samplePdfEndpoint = `${root}/sample-pdf`;
@@ -104,7 +107,7 @@ document.addEventListener("DOMContentLoaded", () => {
     errorMessage.classList.add("hidden");
 
     instructionContent.classList.remove("hidden");
-    sliderContainer.classList.add("hidden");
+    controlsContainer.classList.add("hidden");
     chatForm.classList.add("hidden");
 
     submitBtn.disabled = true;
@@ -146,7 +149,7 @@ document.addEventListener("DOMContentLoaded", () => {
       formTitle.textContent = "Redaction instructions";
       chatInput.placeholder = "Describe what to redact...";
     } else {
-      sliderContainer.classList.remove("hidden");
+      controlsContainer.classList.remove("hidden");
       formTitle.textContent = "Label items you want to blur";
       chatInput.placeholder = "Document, monitor, person";
     }
@@ -172,29 +175,38 @@ document.addEventListener("DOMContentLoaded", () => {
       return;
     }
 
-    // upload
-    disableDropArea();
-    isProcessing = true;
-    browseBtn.disabled = true;
-    submitBtn.disabled = true;
-    submitBtn.textContent = "Uploading…";
-    submitLoader.style.display = "block";
+    submitStatus.classList.add("hidden");
+
     try {
+      // upload
+      disableDropArea();
+      isProcessing = true;
+      browseBtn.disabled = true;
+      submitBtn.disabled = true;
+      submitBtn.textContent = "Uploading…";
+      submitLoader.style.display = "block";
       const fileId = await uploadFile(selectedFile);
 
       // process
       submitBtn.textContent = "Processing…";
       const fd = new FormData();
-      fd.append("file_id", fileId);
       fd.append("prompt", chatInput.value.trim());
+      fd.append("file_id", fileId);
       if (fileType !== "pdf") {
-        const intensityFloat = (
-          parseInt(intensitySlider.value, 10) / 100
+        const mode = document.querySelector(
+          'input[name="mode"]:checked'
+        )?.value;
+        const blurFloat = (parseInt(blurSlider.value, 10) / 100).toFixed(2);
+        const thresholdFloat = (
+          parseInt(thresholdSlider.value, 10) / 100
         ).toFixed(2);
-        fd.append("intensity", intensityFloat);
+
+        fd.append("mode", mode);
+        fd.append("blur_intensity", blurFloat);
+        fd.append("confidence_threshold", thresholdFloat);
       }
 
-      const endpoint = fileType === "pdf" ? redactEndpoint : blurEndpoint;
+      const endpoint = fileType === "pdf" ? documentEndpoint : mediaEndpoint;
       const resp = await fetch(endpoint, { method: "POST", body: fd });
       if (!resp.ok) {
         const err = await resp.json();
@@ -253,13 +265,32 @@ document.addEventListener("DOMContentLoaded", () => {
     }
   }
 
+  function updateControls() {
+    const mode = document.querySelector('input[name="mode"]:checked')?.value;
+    if (!mode) return;
+
+    formTitle.textContent = `Label items you want to ${mode}`;
+
+    if (mode === "blur") {
+      blurGroup.classList.remove("hidden");
+    } else {
+      blurGroup.classList.add("hidden");
+    }
+  }
+
   // —— Event Listeners ——
   browseBtn.addEventListener("click", () => fileInput.click());
   fileInput.addEventListener("change", (e) =>
     validateAndProcessFile(e.target.files[0])
   );
-  intensitySlider.addEventListener("input", () => {
-    intensityValue.textContent = `${intensitySlider.value}%`;
+  document.querySelectorAll('input[name="mode"]').forEach((radio) => {
+    radio.addEventListener("change", updateControls);
+  });
+  blurSlider.addEventListener("input", () => {
+    blurValue.textContent = `${blurSlider.value}%`;
+  });
+  thresholdSlider.addEventListener("input", () => {
+    thresholdValue.textContent = `${thresholdSlider.value}%`;
   });
 
   ["dragenter", "dragover", "dragleave", "drop"].forEach((evt) => {

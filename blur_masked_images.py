@@ -83,15 +83,16 @@ def get_kernel(
     image: np.ndarray, *, coefficient: float, max_fraction: float = 0.05
 ) -> tuple[int, int]:
     """
-    Compute an odd-sized Gaussian kernel based on image size.
+    Compute an odd-sized Gaussian kernel based on image dimensions.
 
     Args:
-        image: HxWxC array.
-        coefficient: [0.0-1.0] fraction of `max_fraction` of min(H, W).
-        max_fraction: maximum fraction of the smaller image dimension.
+        image (np.ndarray): Input image array of shape (H, W, C) or (H, W).
+        coefficient (float): Fraction [0.0, 1.0] of max kernel size.
+        max_fraction (float): Maximum fraction of the smaller image dimension.
 
     Returns:
-        A tuple (k, k) where k is odd and ~ coefficient*max_fraction*min(H,W).
+        Tuple[int, int]: Kernel size (k, k), where k is odd and
+                         proportional to coefficient * max_fraction * min(H, W).
     """
     # clamp coefficient
     coefficient = max(0.0, min(1.0, coefficient))
@@ -103,26 +104,28 @@ def get_kernel(
     return (k, k)
 
 
-def blur_image_copy(
-    image: np.ndarray, *, coefficient: float = 0.5, max_fraction: float = 0.05
+def blur_frame_copy(
+    frame: np.ndarray, *, coefficient: float = 0.5, max_fraction: float = 0.05
 ) -> np.ndarray:
     """
-    Return a fully blurred copy of `image`, with blur scaled
-    by `coefficient` at a working height of 640 px.
+    Return a blurred copy of the input frame.
+
+    Resizes frame to a working height of 640 px, applies Gaussian blur,
+    then rescales back to original size.
 
     Args:
-        image: BGR numpy array.
-        coefficient: [0.0-1.0] controls blur strength.
-        max_fraction: maximum blur kernel relative to image size.
+        frame (np.ndarray): BGR image array of shape (H, W, 3).
+        coefficient (float): Blur strength [0.0, 1.0].
+        max_fraction (float): Max kernel size fraction relative to frame size.
 
     Returns:
-        A new numpy array, same shape as `image`, blurred.
+        np.ndarray: New blurred image array, same shape as frame.
     """
-    h, w = image.shape[:2]
+    h, w = frame.shape[:2]
 
     target_h = 640
     new_w = int(w / h * target_h)
-    resized = cv2.resize(image, (new_w, target_h))
+    resized = cv2.resize(frame, (new_w, target_h))
 
     kernel = get_kernel(resized, coefficient=coefficient, max_fraction=max_fraction)
     blurred = cv2.GaussianBlur(resized, kernel, 0)
@@ -130,17 +133,17 @@ def blur_image_copy(
     return cv2.resize(blurred, (w, h))
 
 
-def blur_mask(mask: torch.Tensor, image: np.ndarray, blurred_image: np.ndarray) -> None:
+def blur_mask(mask: torch.Tensor, frame: np.ndarray, blurred_frame: np.ndarray) -> None:
     """
-    In-place blend `blurred_image` into `image` where `mask` is True.
+    In-place replace masked regions of frame with blurred version.
 
     Args:
-        mask: 2D tensor (H, W) of booleans or floats.
-        image: original image to modify.
-        blurred_image: fully blurred version (same shape as image).
+        mask (torch.Tensor): 2D tensor (H, W) of bools or floats indicating mask.
+        frame (np.ndarray): Original BGR frame array to modify.
+        blurred_frame (np.ndarray): Fully blurred BGR frame, same shape as frame.
 
-    Side-Effects:
-        Writes into `image` where mask==255.
+    Side effects:
+        Modifies `frame` so that wherever mask is True, pixels come from blurred_frame.
     """
     # binary 0/255
     mask_np = (mask.cpu().numpy().astype(np.uint8)) * 255
@@ -149,86 +152,184 @@ def blur_mask(mask: torch.Tensor, image: np.ndarray, blurred_image: np.ndarray) 
     mask_3ch = cv2.merge([mask_np] * 3)
 
     # in-place blend
-    image[mask_3ch == 255] = blurred_image[mask_3ch == 255]
+    frame[mask_3ch == 255] = blurred_frame[mask_3ch == 255]
 
 
-def process_result(
+def blur_result(
     result: Results, coefficient: float = 0.5, max_fraction: float = 0.05
 ) -> Tuple[Path, np.ndarray, bool]:
     """
-    Process a single YOLO prediction result by applying blur to detected mask regions.
+    Apply blur to all detected mask regions in a YOLO result.
 
     Args:
-        result (Results): A YOLO `Results` object containing image, path, and masks.
-        coefficient (float): Blur strength between 0.0 and 1.0.
-        max_fraction (float): Maximum kernel size as a fraction of image dimensions.
+        result (Results): YOLOE Results object (has orig_img, masks, path).
+        coefficient (float): Blur strength [0.0, 1.0].
+        max_fraction (float): Max kernel size fraction relative to image size.
 
     Returns:
         Tuple[Path, np.ndarray, bool]:
-            - Image or video path as a `Path` object.
-            - Processed image as a NumPy array (blurred where masked).
-            - Boolean indicating whether the input was a video frame.
+            path: Path to original media.
+            frame: Processed BGR image array with masks blurred.
+            is_video: True if path suffix indicates a video format.
     """
-    image = result.orig_img.copy()
+    frame = result.orig_img.copy()
 
     if result.masks:
         try:
-            blurred_image = blur_image_copy(
-                image, coefficient=coefficient, max_fraction=max_fraction
-            )
             combined_mask = torch.any(result.masks.data > 0.5, dim=0)
-            blur_mask(combined_mask, image, blurred_image)
+            blurred_frame = blur_frame_copy(
+                frame, coefficient=coefficient, max_fraction=max_fraction
+            )
+            blur_mask(combined_mask, frame, blurred_frame)
 
         except Exception:
             logger.exception("Error during mask processing and blurring")
 
     path = Path(result.path)
     is_video = path.suffix[1:].lower() in VID_FORMATS
-    return path, image, is_video
+    return path, frame, is_video
+
+
+def detect_result(result: Results) -> Tuple[Path, np.ndarray, bool]:
+    """
+    Render detection results (boxes, labels) onto the image.
+
+    Args:
+        result (Results): YOLOE Results object (has plot, path).
+
+    Returns:
+        Tuple[Path, np.ndarray, bool]:
+            path: Path to original media.
+            frame: BGR image array with detection overlays.
+            is_video: True if path suffix indicates a video format.
+    """
+    frame = result.plot()
+    path = Path(result.path)
+    is_video = path.suffix[1:].lower() in VID_FORMATS
+    return path, frame, is_video
+
+
+def censor_mask(mask: torch.Tensor, image: np.ndarray) -> None:
+    """
+    In-place black out masked regions of image.
+
+    Args:
+        mask (torch.Tensor): 2D tensor (H, W) of bools or floats indicating mask.
+        image (np.ndarray): Original BGR image array to modify.
+
+    Side effects:
+        Modifies `image` so that wherever mask is True, pixels are set to zero (black).
+    """
+    # binary 0/255
+    mask_np = (mask.cpu().numpy().astype(np.uint8)) * 255
+
+    # expand to 3 channels
+    mask_3ch = cv2.merge([mask_np] * 3)
+
+    # in-place blend
+    image[mask_3ch == 255] = 0
+
+
+def censor_result(result: Results) -> Tuple[Path, np.ndarray, bool]:
+    """
+    Apply hard censor (black fill) to all detected mask regions.
+
+    Args:
+        result (Results): YOLOE Results object (has orig_img, masks, path).
+
+    Returns:
+        Tuple[Path, np.ndarray, bool]:
+            path: Path to original media.
+            frame: Processed BGR image array with masks blacked out.
+            is_video: True if path suffix indicates a video format.
+    """
+    frame = result.orig_img.copy()
+
+    if result.masks:
+        try:
+            combined_mask = torch.any(result.masks.data > 0.5, dim=0)
+            censor_mask(combined_mask, frame)
+
+        except Exception:
+            logger.exception("Error during mask processing and blurring")
+
+    path = Path(result.path)
+    is_video = path.suffix[1:].lower() in VID_FORMATS
+    return path, frame, is_video
 
 
 def process_results_threaded(
+    mode: str,
     model: YOLOE,
+    confidence_threshold: float,
     input_dir: Path,
     executor: ThreadPoolExecutor,
     blur_intensity: float,
-    verbose: bool = True,
 ) -> Iterator[Tuple[Path, np.ndarray, bool]]:
     """
-    Run YOLO predictions on all media in `input_dir`, blur masks, and yield
-    each processed frame as soon as it's ready.
+    Run YOLO predictions on all media in input_dir, process each result in parallel,
+    and yield processed frames immediately.
 
     Args:
-        model (YOLOE): Initialized YOLO model for detection.
-        input_dir (Path): Directory containing images/videos to process.
-        executor (ThreadPoolExecutor): Executor on which to dispatch frame blurring.
-        blur_intensity (float): Strength of blur to apply to masked regions.
-        verbose (bool): If True, print model.predict progress.
+        mode (str): One of "blur", "censor", or "detect".
+        model (YOLOE): Initialized YOLOE model for inference.
+        confidence_threshold (float): Minimum confidence for detections.
+        input_dir (Path): Directory containing images or videos.
+        executor (ThreadPoolExecutor): Executor for parallel frame processing.
+        blur_intensity (float): Strength of blur to apply (only for mode "blur").
 
     Returns:
         Iterator[Tuple[Path, np.ndarray, bool]]:
-            Yields a tuple for each frame:
-            - Path: original media path (image or video file).
-            - np.ndarray: the blurred (or unmodified) frame array (BGR).
-            - bool: True if this frame came from a video, False for standalone images.
+            Yields (original_path, processed_frame, is_video_flag) per frame.
     """
     results_iter = iter([])
 
     try:
         batch = int(YOLO_BATCH_SIZE)
-        results = model.predict(
-            input_dir,
-            verbose=verbose,
-            batch=batch,
-            retina_masks=True,
-            stream=True,
-            show_labels=False,
-            show_conf=False,
-            show_boxes=False,
-        )
-        results_iter = executor.map(
-            lambda result: process_result(result, blur_intensity), results
-        )
+
+        if mode == "blur":
+            results = model.predict(
+                input_dir,
+                conf=confidence_threshold,
+                batch=batch,
+                stream=True,
+                verbose=True,
+                show_conf=False,
+                show_boxes=False,
+                show_labels=False,
+                retina_masks=True,
+            )
+            results_iter = executor.map(
+                lambda result: blur_result(result, blur_intensity), results
+            )
+        elif mode == "censor":
+            results = model.predict(
+                input_dir,
+                conf=confidence_threshold,
+                batch=batch,
+                stream=True,
+                verbose=True,
+                show_conf=False,
+                show_boxes=False,
+                show_labels=False,
+                retina_masks=True,
+            )
+            results_iter = executor.map(lambda result: censor_result(result), results)
+        elif mode == "detect":
+            results = model.predict(
+                input_dir,
+                conf=confidence_threshold,
+                batch=batch,
+                stream=True,
+                verbose=True,
+                show_conf=True,
+                show_boxes=True,
+                show_labels=True,
+                retina_masks=True,
+            )
+            results_iter = executor.map(lambda result: detect_result(result), results)
+        else:
+            raise ValueError("Unrecognized mode was detected")
 
     except FileNotFoundError as e:
         logger.debug(str(e))
@@ -238,12 +339,15 @@ def process_results_threaded(
 
 def save_image(image: np.ndarray, image_path: Path, output_dir: Path) -> None:
     """
-    Save a single processed image frame to JPEG, preserving its filename.
+    Save a single BGR image as JPEG in the output directory.
 
     Args:
         image (np.ndarray): BGR image array to save.
-        image_path (Path): Original input image path.
-        output_dir (Path): Root directory in which to write the JPEG.
+        image_path (Path): Original file path (used for naming).
+        output_dir (Path): Directory under which .jpg will be written.
+
+    Side effects:
+        Creates output_dir if it does not exist.
     """
     if image is None:
         logger.warning(f"No frame to write for image: {image_path=}")
@@ -260,12 +364,15 @@ def save_image(image: np.ndarray, image_path: Path, output_dir: Path) -> None:
 
 def save_video(frames: List[np.ndarray], video_path: Path, output_dir: Path) -> None:
     """
-    Encode and save a list of processed frames as an MP4, copying original audio.
+    Encode a sequence of BGR frames into an MP4 file, copying original audio.
 
     Args:
-        frames (List[np.ndarray]): In-memory BGR frames for one video.
-        video_path (Path): Original video file path (for audio & metadata).
-        output_dir (Path): Directory in which to write the .mp4.
+        frames (List[np.ndarray]): List of BGR frames to encode.
+        video_path (Path): Path to original video (for audio track).
+        output_dir (Path): Directory under which .mp4 will be written.
+
+    Side effects:
+        Creates output_dir if it does not exist.
     """
     if not frames:
         logger.warning(f"No frames to write for video: {video_path=}")
@@ -331,17 +438,16 @@ def consume_and_save(
     output_dir: Path,
 ) -> int:
     """
-    Consume a stream of processed frames, saving images immediately
-    and collecting/saving video frames in sequence.
+    Save each processed frame or video segment from the results iterator.
+
+    Images are saved immediately; video frames are buffered per file and then saved.
 
     Args:
-        results_iter (Iterator[Tuple[Path, np.ndarray, bool]]):
-            An iterator yielding (path, frame, is_video) for each processed frame.
-        output_dir (Path):
-            Directory under which to save images (.jpg) and videos (.mp4).
+        results_iter (Iterator): Yields (path, frame, is_video) for each frame.
+        output_dir (Path): Base directory for saving outputs.
 
     Returns:
-        int: Total number of frames (images + video frames) saved.
+        int: Total number of frames saved (images + video frames).
     """
     total_frames = 0
     last_path: Path = None
@@ -373,33 +479,39 @@ def consume_and_save(
 
 
 def process_images(
+    mode: str,
     model: YOLOE,
+    confidence_threshold: float,
     input_dir: Path,
     output_dir: Path,
-    blur_intensity: float,
-    verbose: bool = True,
+    blur_intensity: float = 0.5,
 ) -> int:
     """
-    Full pipeline: detect, blur, and save both images and videos under `input_dir`.
+    Run detection on every file in input_dir, process each frame,
+    and save results under output_dir.
 
-    1. Runs YOLO on every file in `input_dir` (images & videos).
-    2. Blurs detected mask regions frame-by-frame.
-    3. Saves images as JPEGs and videos as MP4 (with copied audio).
+    This covers both images and videos, applying blur or censoring as specified.
 
     Args:
-        model (YOLOE): YOLO model instance for prediction.
-        input_dir (Path): Directory containing source images/videos.
-        output_dir (Path): Directory to write processed outputs.
-        blur_intensity (float): Blur strength for masked regions.
-        verbose (bool): If True, show YOLO predict progress.
+        mode (str): One of "blur", "censor", or "detect".
+        model (YOLOE): YOLOE model instance.
+        confidence_threshold (float): Minimum confidence threshold.
+        input_dir (Path): Directory of source media.
+        output_dir (Path): Directory to write processed media.
+        blur_intensity (float): Blur strength (for mode "blur").
 
     Returns:
-        int: Total number of frames (images + video frames) that were saved.
+        int: Total number of frames saved.
     """
     with ThreadPoolExecutor() as executor:
         with FrameTimeLogger("Processing") as timer:
             results_iter = process_results_threaded(
-                model, input_dir, executor, blur_intensity, verbose
+                mode,
+                model,
+                confidence_threshold,
+                input_dir,
+                executor,
+                blur_intensity,
             )
 
         with FrameTimeLogger("Saving frames") as timer:
@@ -410,26 +522,39 @@ def process_images(
 
 
 def process_directory(
+    mode: str,
+    model_name: str,
+    classes: List[str],
+    confidence_threshold: float,
     input_dir: Path,
     output_dir: Path,
-    classes: List[str],
     blur_intensity: float,
-    model_name: str,
 ) -> None:
     """
-    Top-level image processing: sets up the YOLOE model and
-    calls `process_images` for each subfolder.
+    Initialize the YOLOE model, process all files in input_dir (recursively),
+    and write outputs to output_dir preserving subfolder structure.
 
     Args:
-        input_dir: folder with extracted images.
-        output_dir: folder to receive processed subfolders.
-        classes: items for class selection.
+        mode (str): One of "blur", "censor", or "detect".
+        model_name (str): Name or path of YOLOE model.
+        classes (List[str]): Class names to detect.
+        confidence_threshold (float): Minimum confidence threshold.
+        input_dir (Path): Root directory of input media.
+        output_dir (Path): Root directory for processed outputs.
+        blur_intensity (float): Blur strength (for mode "blur").
     """
     model = YOLOE(model_name)
     model.set_classes(classes, model.get_text_pe(classes))
 
     with FrameTimeLogger(f"Processing directory — '{input_dir.name}'") as timer:
-        total_frames = process_images(model, input_dir, output_dir, blur_intensity)
+        total_frames = process_images(
+            mode,
+            model,
+            confidence_threshold,
+            input_dir,
+            output_dir,
+            blur_intensity,
+        )
         timer.set_count(total_frames)
 
     for subdir in input_dir.rglob("*"):
@@ -441,7 +566,14 @@ def process_directory(
         out.mkdir(parents=True, exist_ok=True)
 
         with FrameTimeLogger(f"Processing directory — '{subdir.name}'") as timer:
-            total_frames = process_images(model, subdir, out, blur_intensity)
+            total_frames = process_images(
+                mode,
+                model,
+                confidence_threshold,
+                subdir,
+                out,
+                blur_intensity,
+            )
             timer.set_count(total_frames)
 
 
@@ -465,32 +597,41 @@ def create_processed_zip(processed_file_path: Path, temp_dir_path: Path) -> None
 
 
 def process_file(
+    mode: str,
+    model_name: str,
     uploaded_file_path: Path,
     output_dir: Path,
-    selected_items: List[str],
-    blur_intensity: float,
-    model_name: str,
+    confidence_threshold: float,
+    *,
+    selected_items: List[str] = None,
+    blur_intensity: float = 0.5,
 ) -> Path:
     """
-    Handles processing of an uploaded file (image, video, or ZIP archive).
+    Handle a single uploaded file (image, video, or ZIP), process it, and return the output path.
 
-    Behavior:
-    - If the uploaded file is a ZIP archive:
-        1. Extracts contents into a temporary "original" folder.
-        2. Processes each file, applying blur to selected items.
-        3. Saves processed outputs into a temporary "processed" folder.
-        4. Re-archives the processed files into a ZIP saved at `output_dir`.
+    If input is a ZIP:
+      1. Extract to a temp 'original' folder.
+      2. Process each media file.
+      3. Zip processed results.
 
-    - If the uploaded file is a single image or video:
-        1. Moves the file to a temporary "original" folder.
-        2. Processes the file, applying blur to selected items.
-        3. Saves the result as a .jpg or .mp4 file in `output_dir`.
+    If input is an image/video:
+      1. Copy to temp 'original'.
+      2. Process and save to output_dir.
+
+    Args:
+        mode (str): One of "blur", "censor", or "detect".
+        model_name (str): YOLOE model identifier.
+        uploaded_file_path (Path): Path to uploaded media or ZIP.
+        output_dir (Path): Directory to save final output.
+        confidence_threshold (float): Minimum detection confidence.
+        selected_items (List[str], optional): Subset of classes to process.
+        blur_intensity (float): Blur strength (for mode "blur").
 
     Returns:
-        Path to the final processed file (ZIP, JPG, or MP4).
+        Path: Path to the final processed file (ZIP, JPG, or MP4).
     """
     logger.info(
-        f"START process_file: {uploaded_file_path.name}, items={selected_items}, blur={blur_intensity}, model={model_name}"
+        f"START process_file: {uploaded_file_path.name}, {mode=}, {model_name=}, {selected_items=}, {confidence_threshold=}, {blur_intensity=}"
     )
     output_path = output_dir / uploaded_file_path.name
 
@@ -513,7 +654,13 @@ def process_file(
 
                 shutil.copy2(uploaded_file_path, orig / uploaded_file_path.name)
                 process_directory(
-                    orig, output_dir, selected_items, blur_intensity, model_name
+                    mode,
+                    model_name,
+                    selected_items,
+                    confidence_threshold,
+                    orig,
+                    output_dir,
+                    blur_intensity,
                 )
                 logger.info(f"Finished processing chunk, output at {output_path}")
 
@@ -521,7 +668,13 @@ def process_file(
                 logger.debug("Detected zip archive, extracting and processing folder")
                 extract_zip(uploaded_file_path, orig)
                 process_directory(
-                    orig, proc, selected_items, blur_intensity, model_name
+                    mode,
+                    model_name,
+                    selected_items,
+                    confidence_threshold,
+                    orig,
+                    proc,
+                    blur_intensity,
                 )
                 create_processed_zip(output_path, proc)
 
