@@ -405,7 +405,7 @@ def save_video(frames: List[np.ndarray], video_path: Path, output_dir: Path) -> 
             framerate=fps,
         )
 
-        audio_input = ffmpeg.input(str(video_path), vn=None).audio
+        audio_input = ffmpeg.input(str(video_path), acodec="aac", vn=None).audio
 
         process = video_input.output(
             audio_input,
