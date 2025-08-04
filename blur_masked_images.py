@@ -53,7 +53,7 @@ class VideoCaptureContext:
 
 
 class FrameTimeLogger:
-    def __init__(self, label: str, count: int = None, *, level: str = "INFO"):
+    def __init__(self, label: str, count: int | None = None, *, level: str = "INFO"):
         self.label = label
         self.level = getattr(logging, level.upper(), logging.INFO)
         self.count = count
@@ -450,7 +450,7 @@ def consume_and_save(
         int: Total number of frames saved (images + video frames).
     """
     total_frames = 0
-    last_path: Path = None
+    last_path: Path | None = None
     video_buffer: List[np.ndarray] = []
 
     for path, frame, is_video in results_iter:
@@ -603,7 +603,7 @@ def process_file(
     output_dir: Path,
     confidence_threshold: float,
     *,
-    selected_items: List[str] = None,
+    selected_items: List[str] | None = None,
     blur_intensity: float = 0.5,
 ) -> Path:
     """
@@ -634,6 +634,8 @@ def process_file(
         f"START process_file: {uploaded_file_path.name}, {mode=}, {model_name=}, {selected_items=}, {confidence_threshold=}, {blur_intensity=}"
     )
     output_path = output_dir / uploaded_file_path.name
+    if selected_items is None:
+        selected_items = []
 
     try:
         with tempfile.TemporaryDirectory() as tmp:
