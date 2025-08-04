@@ -1,27 +1,40 @@
-import json
+import os
 import uuid
-import shutil
+import logging.config
 from pathlib import Path
 
-from fastapi import FastAPI, File, Form, HTTPException, Request, UploadFile
+from fastapi import (
+    BackgroundTasks,
+    FastAPI,
+    File,
+    Form,
+    HTTPException,
+    Request,
+    UploadFile,
+)
 from fastapi.responses import FileResponse, JSONResponse, RedirectResponse
-from pydantic import BaseModel
+from fastapi.staticfiles import StaticFiles
+from ultralytics.data.utils import IMG_FORMATS, VID_FORMATS
 
-from chat import generate_keywords
-from file_processing import process_zip_file
+from chat import get_redactions
+from redact import redact_pdf
+from blur_masked_images import process_file
+
+logger = logging.getLogger(__name__)
+
+HOST = os.getenv("HOST", "0.0.0.0")
+PORT = os.getenv("PORT", "8000")
+OLLAMA_MODEL = os.getenv("OLLAMA_MODEL", "qwen3:4b")
+YOLOE_MODEL = os.getenv("YOLOE_MODEL", "yoloe-v8l-seg.pt")
 
 app = FastAPI()
 
-UPLOAD_DIR = Path("uploads")
-PROCESSED_DIR = Path("processed")
-UPLOAD_DIR.mkdir(exist_ok=True)
-PROCESSED_DIR.mkdir(exist_ok=True)
+INPUT_DIR = Path(__file__).parent / "input"
+OUTPUT_DIR = Path(__file__).parent / "output"
+INPUT_DIR.mkdir(exist_ok=True)
+OUTPUT_DIR.mkdir(exist_ok=True)
 
-processed_files = {}
-
-
-class ChatRequest(BaseModel):
-    message: str
+app.mount("/static", StaticFiles(directory="static"), name="static")
 
 
 @app.middleware("http")
@@ -32,143 +45,244 @@ async def removeProxyPath(request: Request, call_next):
     return response
 
 
-@app.get("")
-@app.get("/")
-async def home():
-    return FileResponse("static/index.html")
-
-
 @app.exception_handler(404)
 async def exception_404(request, __):
     root_path = request.scope.get("root_path", "") or "/"
     return RedirectResponse(url=f"{root_path}")
 
 
+@app.get("/")
+async def home():
+    return FileResponse("static/index.html")
+
+
 @app.post("/upload")
-async def upload_zip_file(
-    zipFile: UploadFile = File(...), selectedItemIds: str = Form(None)
-):
+async def upload_file(file: UploadFile = File(...)):
     """
-    Endpoint to handle ZIP file uploads and processing.
+    Endpoint to handle file uploads.
 
     Args:
-        zipFile: The ZIP file uploaded by the user
+        file: The file uploaded by the user
 
     Returns:
-        JSON response with status, message, and processed file ID
+        JSON response with status, message, and file ID
     """
-    if not zipFile.filename.lower().endswith(".zip"):
-        raise HTTPException(status_code=400, detail="Only .zip files are allowed")
+    upload_id = str(uuid.uuid4())
+    uploaded_file_path = INPUT_DIR / f"{upload_id}_{file.filename}"
 
-    selected_items = []
-    if selectedItemIds:
-        selected_items = json.loads(selectedItemIds)
+    # Save uploaded file
+    with open(uploaded_file_path, "wb") as f:
+        f.write(await file.read())
 
-    if not selected_items:
-        raise HTTPException(status_code=400, detail="No items were selected.")
-
-    try:
-        upload_id = str(uuid.uuid4())
-        processed_id = str(uuid.uuid4())
-
-        uploaded_file_path = UPLOAD_DIR / f"{upload_id}_{zipFile.filename}"
-        with open(uploaded_file_path, "wb") as buffer:
-            shutil.copyfileobj(zipFile.file, buffer)
-
-        processed_file_path = process_zip_file(
-            uploaded_file_path, processed_id, PROCESSED_DIR, selected_items
-        )
-
-        # Store the mapping of ID to processed file path
-        processed_files[processed_id] = processed_file_path
-
-        return JSONResponse(
-            status_code=200,
-            content={
-                "status": "success",
-                "message": "File processed successfully. Click to download.",
-                "processedFileId": processed_id,
-            },
-        )
-
-    except Exception as e:
-        print(f"Error processing file: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail="Error processing file: 500 Internal Server Error"
-        )
+    return JSONResponse(
+        status_code=200,
+        content={
+            "status": "success",
+            "message": "File uploaded successfully",
+            "fileId": uploaded_file_path.name,
+        },
+    )
 
 
 @app.get("/download/{file_id}")
-async def download_processed_file(file_id: str):
+async def download_file(background_tasks: BackgroundTasks, file_id: str):
     """
-    Endpoint to download a processed zip file.
+    Endpoint to download a processed  file.
 
     Args:
         file_id: The unique ID of the processed file
 
     Returns:
-        The processed zip file as a download
+        The processed file
     """
-    if file_id not in processed_files:
-        raise HTTPException(status_code=404, detail="Processed file not found")
-
-    file_path = processed_files[file_id]
+    file_path = OUTPUT_DIR / file_id
 
     if not file_path.exists():
         raise HTTPException(status_code=404, detail="Processed file no longer exists")
 
+    background_tasks.add_task(lambda: file_path.unlink())
+
     return FileResponse(
         path=file_path,
-        filename=file_path.name.split("_", 2)[2],  # Remove the "processed_UUID_" prefix
-        media_type="application/zip",
+        filename=file_path.name[37:],  # UUID's are 36 characters long (plus "_")
     )
 
 
-@app.get("/example-zip")
-async def example_zip():
-    return FileResponse(
-        path="static/example.zip", filename="example.zip", media_type="application/zip"
-    )
-
-
-@app.post("/chat")
-async def process_chat(data: ChatRequest):
+@app.post("/media")
+async def media_handler(
+    mode: str = Form(...),
+    prompt: str = Form(...),
+    file_id: str = Form(...),
+    blur_intensity: float = Form(...),
+    confidence_threshold: float = Form(...),
+):
     """
-    Endpoint to process chat messages and return selected items.
+    Generic media processing endpoint that handles blurring, censoring, or detection.
+
+    The `mode` parameter controls the operation:
+      - "blur": apply Gaussian blur to masked regions
+      - "censor": fill masked regions with black
+      - "detect": draw bounding boxes and labels only
+
+    Expects a previously uploaded file identifier and a comma-separated list
+    of class names (`prompt`). For "blur" and "censor" modes, at least one class
+    must be specified; for "detect", `prompt` may be empty.
 
     Args:
-        chat_message: The chat message from the user
+        mode (str): Operation mode; one of "blur", "censor", or "detect".
+        prompt (str): Comma-separated class names to process.
+        file_id (str): Identifier of the uploaded file (must exist under INPUT_DIR).
+        blur_intensity (float): Strength of the blur for "blur" or "censor" modes (0.0 – 1.0).
+        confidence_threshold (float): Minimum detection confidence threshold (0.0 – 1.0).
 
     Returns:
-        JSON response with message and selected items
-    """
-    try:
-        # Process the message (in a real application, this might involve NLP or other processing)
-        message = data.message.lower()
+        JSONResponse:
+            status_code=200 and JSON object:
+            {
+                "status": "success",
+                "message": "File processed successfully",
+                "fileId": "<output filename>"
+            }
 
-        # Simple keyword-based logic to determine which items to select
-        selectedItemIds = generate_keywords(message)
+    Raises:
+        HTTPException(400): Invalid file extension, missing prompt (for blur/censor), or other bad input.
+        HTTPException(404): Uploaded file not found.
+        HTTPException(500): Internal server error during processing.
+    """
+    if mode not in ("blur", "censor", "detect"):
+        logger.error("Uploaded file no longer exists")
+        raise HTTPException(400, "Invalid mode")
+
+    input_path = INPUT_DIR / file_id
+    if not input_path.exists():
+        logger.error("Uploaded file no longer exists")
+        raise HTTPException(404, "Uploaded file no longer exists")
+
+    suffix = input_path.suffix[1:].lower()
+    if suffix not in {"zip"} | IMG_FORMATS | VID_FORMATS:
+        logger.error("Only .zip, image, or video files are allowed")
+        raise HTTPException(400, "Only .zip, image, or video files are allowed")
+
+    selected_items = [item.strip() for item in prompt.split(",") if item.strip()]
+    if not selected_items:
+        logger.error("No items were selected")
+        raise HTTPException(400, "No items were selected")
+
+    model_name = YOLOE_MODEL if selected_items else YOLOE_MODEL.replace(".pt", "-pf.pt")
+
+    try:
+        output_path = process_file(
+            mode=mode,
+            model_name=model_name,
+            uploaded_file_path=input_path,
+            output_dir=OUTPUT_DIR,
+            confidence_threshold=confidence_threshold,
+            selected_items=selected_items,
+            blur_intensity=blur_intensity,
+        )
+        return JSONResponse(
+            status_code=200,
+            content={
+                "status": "success",
+                "message": "File processed successfully",
+                "fileId": output_path.name,
+            },
+        )
+
+    except Exception:
+        logger.exception("Internal Server Error")
+        raise HTTPException(500, "Internal Server Error")
+
+
+@app.post("/document")
+async def document_handler(
+    background_tasks: BackgroundTasks, file_id: str = Form(...), prompt: str = Form(...)
+):
+    """
+    Endpoint to handle PDF redaction.
+
+    Args:
+        file_id: The file id of the PDF to process.
+        prompt: The prompt from the user
+
+    Returns:
+        JSON response with status and message
+    """
+    input_path = INPUT_DIR / file_id
+    output_path = OUTPUT_DIR / file_id
+
+    if not prompt:
+        logger.error("Please enter a prompt")
+        raise HTTPException(status_code=400, detail="Please enter a prompt")
+
+    if not input_path.exists():
+        logger.error("Uploaded file no longer exists")
+        raise HTTPException(status_code=404, detail="Uploaded file no longer exists")
+
+    try:
+        redactions = get_redactions(prompt, input_path, OLLAMA_MODEL)
+
+        redact_pdf(input_path, output_path, redactions)
+
+        background_tasks.add_task(lambda: input_path.unlink())
 
         return JSONResponse(
             status_code=200,
             content={
-                "message": f"Processed message: '{data.message}'",
-                "selectedItemIds": selectedItemIds,
+                "status": "success",
+                "message": "File processed successfully",
+                "fileId": output_path.name,
             },
         )
 
-    except Exception as e:
-        print(f"Error processing chat message: {str(e)}")
-        raise HTTPException(
-            status_code=500, detail=f"Error processing chat message: {str(e)}"
-        )
+    except Exception:
+        logger.exception("Internal Server Error")
+        raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+@app.get("/sample-zip")
+async def sample_zip():
+    return FileResponse(
+        path="static/sample.zip", filename="sample.zip", media_type="application/zip"
+    )
+
+
+@app.get("/sample-pdf")
+async def sample_pdf():
+    return FileResponse(
+        path="static/sample.pdf", filename="sample.pdf", media_type="application/pdf"
+    )
 
 
 # Run the app with uvicorn
 if __name__ == "__main__":
-    import ollama
     import uvicorn
+    import threading
+    from logging_config import LOGGING_CONFIG
 
-    ollama.pull("qwen3:4b")
+    logging.config.dictConfig(LOGGING_CONFIG)
 
-    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+    def startup():
+        import ollama
+        from ultralytics import YOLOE
+
+        logger = logging.getLogger("startup")
+
+        logger.info("Downloading YOLO model...")
+        YOLOE(YOLOE_MODEL).get_text_pe("0")
+        YOLOE(YOLOE_MODEL.replace(".pt", "-pf.pt"))
+        logger.info("YOLO model download complete.")
+
+        logger.info("Starting Ollama model download...")
+        try:
+            ollama.pull(OLLAMA_MODEL)
+            logger.info("Ollama model download complete.")
+        except Exception as e:
+            logger.error(f"Failed to download Ollama model: {e}")
+
+    download_thread = threading.Thread(target=startup)
+    download_thread.start()
+
+    uvicorn.run(
+        "main:app", host=HOST, port=int(PORT), reload=False, log_config=LOGGING_CONFIG
+    )

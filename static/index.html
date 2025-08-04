@@ -1,912 +1,115 @@
 <!DOCTYPE html>
 <html lang="en">
-  <head>
-    <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>Automatic Image Blur</title>
-    <style>
-      body {
-        font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
-          Oxygen, Ubuntu, Cantarell, "Open Sans", "Helvetica Neue", sans-serif;
-        max-width: 800px;
-        margin: 0 auto;
-        padding: 2rem;
-        line-height: 1.6;
-      }
-      h1 {
-        text-align: center;
-        margin-bottom: 2rem;
-        color: #333;
-      }
-      .upload-container {
-        border: 2px dashed #ccc;
-        border-radius: 8px;
-        padding: 2rem;
-        text-align: center;
-        margin-bottom: 1.5rem;
-        transition: all 0.3s ease;
-        background-color: #f9f9f9;
-      }
-      .upload-container.drag-over {
-        border-color: #4a90e2;
-        background-color: #f0f7ff;
-      }
-      .file-info {
-        margin: 1rem 0;
-        font-size: 0.9rem;
-        color: #666;
-      }
-      .file-name {
-        font-weight: bold;
-        color: #333;
-        word-break: break-all;
-      }
-      .btn {
-        padding: 0.75rem 1.5rem;
-        font-size: 1rem;
-        border-radius: 4px;
-        cursor: pointer;
-        transition: background-color 0.3s ease;
-        display: block;
-        margin: 0 auto;
-        border: none;
-      }
-      .upload-btn {
-        background-color: #4a90e2;
-        color: white;
-      }
-      .upload-btn:hover {
-        background-color: #3a7bc8;
-      }
-      .download-btn {
-        background-color: #27ae60;
-        color: white;
-      }
-      .download-btn:hover {
-        background-color: #219653;
-      }
-      .example-btn {
-        background-color: #f39c12;
-        color: white;
-        margin-top: 1rem;
-      }
-      .example-btn:hover {
-        background-color: #e67e22;
-      }
-      .btn:disabled {
-        background-color: #cccccc;
-        cursor: not-allowed;
-      }
-      .error-message {
-        color: #e74c3c;
-        margin-top: 0.5rem;
-        font-size: 0.9rem;
-      }
-      .success-message {
-        color: #27ae60;
-        margin-top: 0.5rem;
-        font-size: 0.9rem;
-      }
-      .hidden {
-        display: none;
-      }
-      .status-container {
-        text-align: center;
-        margin-top: 1rem;
-      }
-      .loader {
-        border: 4px solid #f3f3f3;
-        border-top: 4px solid #3498db;
-        border-radius: 50%;
-        width: 20px;
-        height: 20px;
-        animation: spin 1s linear infinite;
-        margin: 0 auto;
-        display: none;
-      }
-      @keyframes spin {
-        0% {
-          transform: rotate(0deg);
-        }
-        100% {
-          transform: rotate(360deg);
-        }
-      }
-      #download-frame {
-        display: none;
-      }
-      .example-container {
-        text-align: center;
-        margin-top: 2rem;
-        padding-top: 1.5rem;
-        border-top: 1px solid #eee;
-      }
-      .example-text {
-        margin-bottom: 1rem;
-        color: #666;
-      }
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>AutoCensor</title>
+  <link rel="stylesheet" href="/static/styles.css">
+  <script src="/static/script.js" defer></script>
+</head>
+<body>
+  <div class="app-container">
+    <header>
+      <h1>AutoCensor</h1>
+      <p class="subtitle">Upload files for automatic processing</p>
+    </header>
 
-      /* Multiselect Dropdown Styles */
-      .multiselect-container {
-        margin: 1.5rem 0;
-        position: relative;
-        width: 100%;
-        max-width: 400px;
-        margin-left: auto;
-        margin-right: auto;
-      }
-      .multiselect-label {
-        display: block;
-        margin-bottom: 0.5rem;
-        font-weight: 500;
-        text-align: left;
-      }
-      .multiselect-dropdown {
-        position: relative;
-      }
-      .multiselect-btn {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        width: 100%;
-        padding: 0.75rem 1rem;
-        background-color: white;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        cursor: pointer;
-        text-align: left;
-      }
-      .multiselect-btn:hover {
-        border-color: #bbb;
-      }
-      .multiselect-btn:focus {
-        outline: none;
-        border-color: #4a90e2;
-        box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
-      }
-      .multiselect-options {
-        position: absolute;
-        top: 100%;
-        left: 0;
-        right: 0;
-        z-index: 10;
-        margin-top: 4px;
-        max-height: 200px;
-        overflow-y: auto;
-        overflow-x: hidden; /* Prevent horizontal scrolling */
-        background-color: white;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-        display: none;
-      }
-      .multiselect-options.show {
-        display: block;
-      }
-      .multiselect-search {
-        width: 100%;
-        padding: 0.5rem;
-        border: none;
-        border-bottom: 1px solid #eee;
-        margin-bottom: 0.5rem;
-      }
-      .multiselect-search:focus {
-        outline: none;
-        border-bottom-color: #4a90e2;
-      }
-      .multiselect-option {
-        display: flex;
-        align-items: center;
-        padding: 0.5rem 1rem;
-        cursor: pointer;
-        white-space: nowrap; /* Keep text on one line */
-      }
-      .multiselect-option:hover {
-        background-color: #f5f5f5;
-      }
-      .multiselect-option input {
-        margin-right: 0.5rem;
-      }
-      .multiselect-selected {
-        display: flex;
-        flex-wrap: wrap;
-        gap: 0.5rem;
-        margin-top: 0.5rem;
-      }
-      .multiselect-tag {
-        display: inline-flex;
-        align-items: center;
-        background-color: #e1f0ff;
-        color: #4a90e2;
-        padding: 0.25rem 0.5rem;
-        border-radius: 4px;
-        font-size: 0.875rem;
-      }
-      .multiselect-tag-remove {
-        margin-left: 0.25rem;
-        cursor: pointer;
-        font-weight: bold;
-      }
-      .multiselect-placeholder {
-        color: #999;
-      }
-      .multiselect-arrow {
-        border: solid #666;
-        border-width: 0 2px 2px 0;
-        display: inline-block;
-        padding: 3px;
-        transform: rotate(45deg);
-        margin-left: 8px;
-      }
-      .multiselect-arrow.up {
-        transform: rotate(-135deg);
-      }
-      .chat-container {
-        margin: 2rem 0;
-        padding-top: 1.5rem;
-        border-top: 1px solid #eee;
-      }
-      .chat-title {
-        text-align: center;
-        margin-bottom: 1rem;
-        color: #333;
-        font-size: 1.5rem;
-      }
-      .chat-box {
-        width: 100%;
-        max-width: 600px;
-        margin: 0 auto;
-      }
-      .chat-input {
-          width: 100%;
-          padding: 0.75rem;
-          border: 1px solid #ddd;
-          border-radius: 4px;
-          margin-bottom: 1rem;
-          font-family: inherit;
-          font-size: 1rem;
-          resize: vertical;
-          min-height: 80px;
-      }
-      .chat-input:focus {
-          outline: none;
-          border-color: #4a90e2;
-          box-shadow: 0 0 0 2px rgba(74, 144, 226, 0.2);
-      }
-      .chat-submit {
-          background-color: #4a90e2;
-          color: white;
-      }
-      .chat-submit:hover {
-          background-color: #3a7bc8;
-      }
-      .chat-status {
-          display: flex;
-          text-align: center;
-          margin-top: 1rem;
-          font-size: 0.9rem;
-      }
-    </style>
-  </head>
-  <body>
-    <h1>Automatic Image Blur</h1>
+    <main>
+      <div class="content-grid">
+        <!-- ── Upload Section ── -->
+        <section class="upload-section">
+          <h2>File Upload</h2>
+          <div id="drop-area" class="upload-container">
+            <div class="upload-icon">
+              <!-- (SVG unchanged) -->
+            </div>
+            <p>Drag & drop your file here</p>
+            <p class="upload-hint">Supports most media, .zip and .pdf files</p>
+            <input type="file" id="file-input"
+              accept=".zip,.pdf,.bmp,.dng,.jpeg,.jpg,.mpo,.png,.tif,.tiff,.webp,.pfm,.heic,.asf,.avi,.gif,.m4v,.mkv,.mov,.mp4,.mpeg,.mpg,.ts,.wmv,.webm"
+              hidden />
+            <button type="button" id="browse-btn" class="secondary-btn">Browse Files</button>
 
-    <form id="upload-form">
-      <div id="drop-area" class="upload-container">
-        <p>Drag & drop your .zip file here</p>
-        <p>or</p>
-        <input
-          type="file"
-          id="file-input"
-          name="zipFile"
-          accept=".zip"
-          style="display: none"
-        />
-        <button
-          type="button"
-          id="browse-btn"
-          style="
-            background-color: #eee;
-            border: 1px solid #ddd;
-            padding: 0.5rem 1rem;
-            border-radius: 4px;
-            cursor: pointer;
-          "
-        >
-          Browse Files
-        </button>
+            <div id="file-info" class="file-info hidden">
+              <span id="file-icon"></span>
+              <span id="file-name" class="file-name"></span>
+              <span id="file-type-badge" class="file-type-badge"></span>
+            </div>
+            <div id="error-message" class="error-message hidden"></div>
+          </div>
+        </section>
 
-        <div id="file-info" class="file-info hidden">
-          Selected file: <span id="file-name" class="file-name"></span>
-        </div>
+        <!-- ── Options & Instructions ── -->
+        <section class="options-section">
+          <h2>Processing Options</h2>
 
-        <div id="error-message" class="error-message hidden"></div>
-      </div>
+          <!-- Instruction before file chosen -->
+          <div id="instruction-content" class="instruction-text">
+            <p>📁 Upload a <strong>.zip file</strong> or media file to blur objects in images and videos.</p>
+            <p>📄 Upload a <strong>.pdf file</strong> to redact sensitive information.</p>
+          </div>
 
-      <!-- Multi-select dropdown -->
-      <div class="multiselect-container">
-        <label for="multiselect" class="multiselect-label"
-          >Select items (searchable, multi-select):</label
-        >
-        <div class="multiselect-dropdown" id="multiselect">
-          <button type="button" class="multiselect-btn" id="multiselect-btn">
-            <span id="multiselect-text" class="multiselect-placeholder"
-              >Select items...</span
-            >
-            <span class="multiselect-arrow"></span>
-          </button>
-          <div class="multiselect-options" id="multiselect-options">
-            <input
-              type="text"
-              class="multiselect-search"
-              id="multiselect-search"
-              placeholder="Search items..."
-            />
-            <div id="multiselect-items">
-              <!-- Options will be added here dynamically -->
+          <!-- Mode selector -->
+          <div id="controls-container" class="hidden">
+            <!-- Mode selector row -->
+            <div class="mode-selector">
+              <input type="radio" name="mode" id="mode-blur" value="blur" checked>
+              <label for="mode-blur">Blur</label>
+
+              <input type="radio" name="mode" id="mode-censor" value="censor">
+              <label for="mode-censor">Censor</label>
+
+              <input type="radio" name="mode" id="mode-detect" value="detect">
+              <label for="mode-detect">Detect</label>
+            </div>
+
+            <div id="slider-container">
+              <div id="threshold-group" class="slider-group">
+                <label for="threshold-slider" class="slider-label">
+                  Confidence Threshold: <span id="threshold-value">25%</span>
+                </label>
+                <input type="range" id="threshold-slider" min="0" max="100" value="25" step="1">
+              </div>
+
+              <div id="blur-group" class="slider-group">
+                <label for="blur-slider" class="slider-label">
+                  Blur Intensity: <span id="blur-value">75%</span>
+                </label>
+                <input type="range" id="blur-slider" min="0" max="100" value="75" step="1">
+              </div>
             </div>
           </div>
-        </div>
-        <div class="multiselect-selected" id="multiselect-selected">
-          <!-- Selected tags will appear here -->
-        </div>
+
+
+          <!-- Generic Chat Form (swapped by JS) -->
+          <div id="chat-form" class="hidden">
+            <h3 id="form-title"></h3>
+            <textarea id="chat-input" class="chat-input" rows="4"></textarea>
+            <div class="submit-container">
+              <button type="button" id="submit-btn" class="primary-btn" disabled>Submit</button>
+              <div id="submit-loader" class="loader"></div>
+            </div>
+            <div id="submit-status" class="success-message hidden"></div>
+          </div>
+        </section>
       </div>
 
-      <button type="button" id="action-btn" class="btn upload-btn" disabled>
-        Upload File
-      </button>
-      <div class="status-container">
-        <div id="loader" class="loader"></div>
-        <div id="status-message" class="success-message hidden"></div>
-      </div>
-    </form>
-
-    <!-- Chat Box Section -->
-    <div class="chat-container">
-      <h2 class="chat-title">Chat with the System</h2>
-      <div class="chat-box">
-        <textarea id="chat-input" class="chat-input" placeholder="Type your message here..."></textarea>
-        <button type="button" id="chat-submit" class="btn chat-submit">
-          Submit
-        </button>
-        <div class="status-container">
-          <div id="chat-loader" class="loader"></div>
-          <div id="chat-status-text" class="success-message hidden"></div>
+      <!-- ── Sample Downloads ── -->
+      <section class="example-container">
+        <h2>Sample Files</h2>
+        <p class="example-text">Don't have a file? Download a sample:</p>
+        <div class="example-buttons">
+          <button id="sample-zip-btn" class="secondary-btn">Sample ZIP</button>
+          <button id="sample-pdf-btn" class="secondary-btn">Sample PDF</button>
         </div>
-      </div>
-    </div>
-
-    <div class="example-container">
-      <p class="example-text">Don't have a ZIP file? Download an example:</p>
-      <button type="button" id="example-btn" class="btn example-btn">
-        Download Example ZIP
-      </button>
-    </div>
-
-    <!-- Hidden iframe for downloads -->
-    <iframe id="download-frame" name="download-frame"></iframe>
-
-    <script>
-      const loader = document.getElementById("loader");
-      const dropArea = document.getElementById("drop-area");
-      const fileInfo = document.getElementById("file-info");
-      const fileName = document.getElementById("file-name");
-      const actionBtn = document.getElementById("action-btn");
-      const browseBtn = document.getElementById("browse-btn");
-      const fileInput = document.getElementById("file-input");
-      const exampleBtn = document.getElementById("example-btn");
-      const uploadForm = document.getElementById("upload-form");
-      const errorMessage = document.getElementById("error-message");
-      const downloadFrame = document.getElementById("download-frame");
-      const statusMessage = document.getElementById("status-message");
-
-      // Chat elements
-      const chatInput = document.getElementById('chat-input');
-      const chatSubmit = document.getElementById('chat-submit');
-      const chatStatus = document.getElementById('chat-status');
-      const chatLoader = document.getElementById('chat-loader');
-      const chatStatusText = document.getElementById('chat-status-text');
-
-      let selectedFile = null;
-      let processedFileId = null;
-
-      if (
-        window.location.pathname.endsWith("/") &&
-        window.location.pathname !== "/"
-      ) {
-        const newUrl =
-          window.location.pathname.slice(0, -1) +
-          window.location.search +
-          window.location.hash;
-        window.history.replaceState(null, "", newUrl);
-      }
-
-      let root = window.location.href;
-      if (window.location.pathname === "/") {
-        root = "";
-      }
-
-      const uploadEndpoint = `${root}/upload`;
-      const downloadEndpoint = `${root}/download`;
-      const exampleEndpoint = `${root}/example-zip`;
-
-      // Multiselect elements
-      const multiselectBtn = document.getElementById("multiselect-btn");
-      const multiselectOptions = document.getElementById("multiselect-options");
-      const multiselectText = document.getElementById("multiselect-text");
-      const multiselectSearch = document.getElementById("multiselect-search");
-      const multiselectItems = document.getElementById("multiselect-items");
-      const multiselectSelected = document.getElementById(
-        "multiselect-selected"
-      );
-      const multiselectArrow =
-        multiselectBtn.querySelector(".multiselect-arrow");
-      // Available items for the multiselect dropdown
-      const items = [
-        { id: 0, name: "person" },
-        { id: 1, name: "bicycle" },
-        { id: 2, name: "car" },
-        { id: 3, name: "motorcycle" },
-        { id: 4, name: "airplane" },
-        { id: 5, name: "bus" },
-        { id: 6, name: "train" },
-        { id: 7, name: "truck" },
-        { id: 8, name: "boat" },
-        { id: 9, name: "traffic light" },
-        { id: 10, name: "fire hydrant" },
-        { id: 11, name: "stop sign" },
-        { id: 12, name: "parking meter" },
-        { id: 13, name: "bench" },
-        { id: 14, name: "bird" },
-        { id: 15, name: "cat" },
-        { id: 16, name: "dog" },
-        { id: 17, name: "horse" },
-        { id: 18, name: "sheep" },
-        { id: 19, name: "cow" },
-        { id: 20, name: "elephant" },
-        { id: 21, name: "bear" },
-        { id: 22, name: "zebra" },
-        { id: 23, name: "giraffe" },
-        { id: 24, name: "backpack" },
-        { id: 25, name: "umbrella" },
-        { id: 26, name: "handbag" },
-        { id: 27, name: "tie" },
-        { id: 28, name: "suitcase" },
-        { id: 29, name: "frisbee" },
-        { id: 30, name: "skis" },
-        { id: 31, name: "snowboard" },
-        { id: 32, name: "sports ball" },
-        { id: 33, name: "kite" },
-        { id: 34, name: "baseball bat" },
-        { id: 35, name: "baseball glove" },
-        { id: 36, name: "skateboard" },
-        { id: 37, name: "surfboard" },
-        { id: 38, name: "tennis racket" },
-        { id: 39, name: "bottle" },
-        { id: 40, name: "wine glass" },
-        { id: 41, name: "cup" },
-        { id: 42, name: "fork" },
-        { id: 43, name: "knife" },
-        { id: 44, name: "spoon" },
-        { id: 45, name: "bowl" },
-        { id: 46, name: "banana" },
-        { id: 47, name: "apple" },
-        { id: 48, name: "sandwich" },
-        { id: 49, name: "orange" },
-        { id: 50, name: "broccoli" },
-        { id: 51, name: "carrot" },
-        { id: 52, name: "hot dog" },
-        { id: 53, name: "pizza" },
-        { id: 54, name: "donut" },
-        { id: 55, name: "cake" },
-        { id: 56, name: "chair" },
-        { id: 57, name: "couch" },
-        { id: 58, name: "potted plant" },
-        { id: 59, name: "bed" },
-        { id: 60, name: "dining table" },
-        { id: 61, name: "toilet" },
-        { id: 62, name: "tv" },
-        { id: 63, name: "laptop" },
-        { id: 64, name: "mouse" },
-        { id: 65, name: "remote" },
-        { id: 66, name: "keyboard" },
-        { id: 67, name: "cell phone" },
-        { id: 68, name: "microwave" },
-        { id: 69, name: "oven" },
-        { id: 70, name: "toaster" },
-        { id: 71, name: "sink" },
-        { id: 72, name: "refrigerator" },
-        { id: 73, name: "book" },
-        { id: 74, name: "clock" },
-        { id: 75, name: "vase" },
-        { id: 76, name: "scissors" },
-        { id: 77, name: "teddy bear" },
-        { id: 78, name: "hair drier" },
-        { id: 79, name: "toothbrush" },
-        { id: 80, name: "text" },
-      ];
-
-      // Selected item IDs - set default selections
-      let selectedItemIds = [62, 63, 80]; // tv, laptop, text
-
-      // Initialize multiselect dropdown
-      function initMultiselect() {
-        // Populate options
-        renderMultiselectOptions();
-
-        // Update selected items display for default selections
-        updateSelectedItems();
-
-        // Toggle dropdown on button click
-        multiselectBtn.addEventListener("click", () => {
-          multiselectOptions.classList.toggle("show");
-          multiselectArrow.classList.toggle("up");
-          if (multiselectOptions.classList.contains("show")) {
-            multiselectSearch.focus();
-          }
-        });
-
-        // Close dropdown when clicking outside
-        document.addEventListener("click", (e) => {
-          if (!e.target.closest(".multiselect-dropdown")) {
-            multiselectOptions.classList.remove("show");
-            multiselectArrow.classList.remove("up");
-          }
-        });
-
-        // Search functionality
-        multiselectSearch.addEventListener("input", () => {
-          const searchTerm = multiselectSearch.value.toLowerCase();
-          renderMultiselectOptions(searchTerm);
-        });
-      }
-
-      // Render multiselect options
-      function renderMultiselectOptions(searchTerm = "") {
-        multiselectItems.innerHTML = "";
-
-        items.forEach((item) => {
-          if (
-            searchTerm === "" ||
-            item.name.toLowerCase().includes(searchTerm)
-          ) {
-            const option = document.createElement("div");
-            option.className = "multiselect-option";
-
-            const checkbox = document.createElement("input");
-            checkbox.type = "checkbox";
-            checkbox.id = `item-${item.id}`;
-            checkbox.checked = selectedItemIds.includes(item.id);
-
-            const label = document.createElement("label");
-            label.htmlFor = `item-${item.id}`;
-            label.textContent = item.name;
-
-            option.appendChild(checkbox);
-            option.appendChild(label);
-
-            option.addEventListener("click", (e) => {
-              if (e.target !== checkbox) {
-                checkbox.checked = !checkbox.checked;
-              }
-
-              if (checkbox.checked) {
-                if (!selectedItemIds.includes(item.id)) {
-                  selectedItemIds.push(item.id);
-                }
-              } else {
-                selectedItemIds = selectedItemIds.filter(
-                  (id) => id !== item.id
-                );
-              }
-
-              updateSelectedItems();
-            });
-
-            multiselectItems.appendChild(option);
-          }
-        });
-      }
-
-      // Update selected items display
-      function updateSelectedItems() {
-        multiselectSelected.innerHTML = "";
-
-        if (selectedItemIds.length === 0) {
-          multiselectText.textContent = "Select items...";
-          multiselectText.className = "multiselect-placeholder";
-          return;
-        }
-
-        multiselectText.textContent = `${selectedItemIds.length} item(s) selected`;
-        multiselectText.className = "";
-
-        selectedItemIds.forEach((id) => {
-          const item = items.find((item) => item.id === id);
-          if (!item) return;
-
-          const tag = document.createElement("div");
-          tag.className = "multiselect-tag";
-          tag.textContent = item.name;
-
-          const removeBtn = document.createElement("span");
-          removeBtn.className = "multiselect-tag-remove";
-          removeBtn.textContent = "×";
-          removeBtn.addEventListener("click", (e) => {
-            e.stopPropagation();
-            selectedItemIds = selectedItemIds.filter((itemId) => itemId !== id);
-            updateSelectedItems();
-            renderMultiselectOptions(multiselectSearch.value.toLowerCase());
-          });
-
-          tag.appendChild(removeBtn);
-          multiselectSelected.appendChild(tag);
-        });
-      }
-
-      // Handle browse button click
-      browseBtn.addEventListener("click", () => {
-        fileInput.click();
-      });
-
-      // Handle file selection via input
-      fileInput.addEventListener("change", handleFileSelect);
-
-      // Prevent default drag behaviors
-      ["dragenter", "dragover", "dragleave", "drop"].forEach((eventName) => {
-        dropArea.addEventListener(eventName, preventDefaults, false);
-        document.body.addEventListener(eventName, preventDefaults, false);
-      });
-
-      // Highlight drop area when item is dragged over it
-      ["dragenter", "dragover"].forEach((eventName) => {
-        dropArea.addEventListener(eventName, highlight, false);
-      });
-
-      // Remove highlight when item is dragged out or dropped
-      ["dragleave", "drop"].forEach((eventName) => {
-        dropArea.addEventListener(eventName, unhighlight, false);
-      });
-
-      // Handle dropped files
-      dropArea.addEventListener("drop", handleDrop, false);
-
-      // Handle action button click (upload or download)
-      actionBtn.addEventListener("click", handleActionButtonClick);
-
-      // Handle example button click
-      exampleBtn.addEventListener("click", () => {
-        downloadFrame.src = exampleEndpoint;
-      });
-
-      // Handle chat submit button click
-      chatSubmit.addEventListener('click', handleChatSubmit);
-
-      function preventDefaults(e) {
-        e.preventDefault();
-        e.stopPropagation();
-      }
-
-      function highlight() {
-        dropArea.classList.add("drag-over");
-      }
-
-      function unhighlight() {
-        dropArea.classList.remove("drag-over");
-      }
-
-      function handleDrop(e) {
-        const dt = e.dataTransfer;
-        const files = dt.files;
-
-        if (files.length > 0) {
-          validateAndProcessFile(files[0]);
-        }
-      }
-
-      function handleFileSelect(e) {
-        const files = e.target.files;
-
-        if (files.length > 0) {
-          validateAndProcessFile(files[0]);
-        }
-      }
-
-      function validateAndProcessFile(file) {
-        // Reset UI elements
-        errorMessage.classList.add("hidden");
-        errorMessage.textContent = "";
-        statusMessage.classList.add("hidden");
-        statusMessage.textContent = "";
-
-        // Reset button to upload state if it was in download state
-        if (actionBtn.classList.contains("download-btn")) {
-          actionBtn.classList.remove("download-btn");
-          actionBtn.classList.add("upload-btn");
-          actionBtn.textContent = "Upload File";
-        }
-
-        // Check if file is a zip
-        if (file.name.toLowerCase().endsWith(".zip")) {
-          // Store the selected file
-          selectedFile = file;
-
-          // Display file info
-          fileName.textContent = file.name;
-          fileInfo.classList.remove("hidden");
-
-          // Enable upload button
-          actionBtn.disabled = false;
-        } else {
-          // Show error for non-zip files
-          errorMessage.textContent = "Please select a .zip file";
-          errorMessage.classList.remove("hidden");
-          fileInfo.classList.add("hidden");
-          actionBtn.disabled = true;
-          selectedFile = null;
-        }
-      }
-
-      async function handleActionButtonClick() {
-        // If button is in download state
-        if (actionBtn.classList.contains("download-btn")) {
-          // Trigger download of processed file
-          initiateDownload(processedFileId);
-
-          // Reset UI after download is initiated
-          resetUI();
-          return;
-        }
-
-        // If button is in upload state
-        if (selectedFile) {
-          try {
-            // Show loading state
-            actionBtn.disabled = true;
-            actionBtn.textContent = "Processing...";
-            loader.style.display = "block";
-
-            // Create form data
-            const formData = new FormData();
-            formData.append("zipFile", selectedFile);
-
-            // Add selected item IDs to form data
-            formData.append("selectedItemIds", JSON.stringify(selectedItemIds));
-
-            // Send the file to the server
-            const response = await fetch(uploadEndpoint, {
-              method: "POST",
-              body: formData,
-            });
-
-            // Hide loader
-            loader.style.display = "none";
-
-            if (response.ok) {
-              const data = await response.json();
-
-              // Store the processed file ID
-              processedFileId = data.processedFileId;
-
-              // Show success message
-              statusMessage.textContent = data.message;
-              statusMessage.classList.remove("hidden");
-
-              // Change button to download state
-              actionBtn.classList.remove("upload-btn");
-              actionBtn.classList.add("download-btn");
-              actionBtn.textContent = "Download Processed File";
-              actionBtn.disabled = false;
-            } else {
-              const errorData = await response.json();
-              throw new Error(errorData.detail || "Upload failed");
-            }
-          } catch (error) {
-            // Show error message
-            errorMessage.textContent = error.message;
-            errorMessage.classList.remove("hidden");
-
-            // Reset button
-            actionBtn.textContent = "Upload File";
-            actionBtn.disabled = false;
-          }
-        }
-      }
-
-      function initiateDownload(fileId) {
-        // Use the hidden iframe to trigger download without navigating away
-        downloadFrame.src = `${downloadEndpoint}/${fileId}`;
-
-        // Show a temporary message
-        statusMessage.textContent = "Download started...";
-
-        // Disable the button temporarily during download
-        actionBtn.disabled = true;
-
-        // After a short delay, reset the UI to allow for a new upload
-        setTimeout(() => {
-          resetUI();
-        }, 1500);
-      }
-
-      function resetUI() {
-        // Reset button to upload state
-        actionBtn.classList.remove("download-btn");
-        actionBtn.classList.add("upload-btn");
-        actionBtn.textContent = "Upload File";
-        actionBtn.disabled = true;
-
-        // Clear file input
-        fileInput.value = "";
-        selectedFile = null;
-
-        // Hide file info
-        fileInfo.classList.add("hidden");
-
-        // Update status message
-        statusMessage.textContent = "Ready for next file";
-
-        // Clear processed file ID
-        processedFileId = null;
-
-        // Don't reset selected items - keep them for the next upload
-      }
-
-      // Handle chat submission
-      async function handleChatSubmit() {
-            const message = chatInput.value.trim();
-            
-            try {
-                // Show loading state
-                chatSubmit.disabled = true;
-                chatSubmit.textContent = 'Thinking...';
-                chatSubmit.style.color = '#666';
-                chatLoader.style.display = 'inline-block';
-                
-                // Send the message to the server
-                const response = await fetch('/chat', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ message })
-                });
-                
-                if (response.ok) {
-                    const data = await response.json();
-                    
-                    // Update the selected items based on the response
-                    if (data.selectedItemIds && Array.isArray(data.selectedItemIds)) {
-                        selectedItemIds = data.selectedItemIds;
-                        updateSelectedItems();
-                        renderMultiselectOptions();
-                    }
-                    
-                    // Show success message
-                    chatStatusText.textContent = data.message || 'Message processed successfully';
-                    chatStatusText.style.color = '#27ae60';
-                    
-                    // Clear the chat input
-                    chatInput.value = '';
-                } else {
-                    const errorData = await response.json();
-                    throw new Error(errorData.detail || 'Failed to process message');
-                }
-            } catch (error) {
-                // Show error message
-                chatStatusText.textContent = error.message;
-                chatStatusText.style.color = '#e74c3c';
-            } finally {
-                // Re-enable the submit button and hide loader
-                chatSubmit.disabled = false;
-                chatSubmit.textContent = 'Submit';
-                chatSubmit.style.color = 'white';
-                chatLoader.style.display = 'none';
-            }
-        }
-
-      // Initialize the multiselect dropdown
-      initMultiselect();
-    </script>
-  </body>
+      </section>
+    </main>
+
+    <footer>
+      <p>&copy; 2025 AutoCensor. All rights reserved.</p>
+    </footer>
+  </div>
+
+  <iframe id="download-frame" name="download-frame" hidden></iframe>
+</body>
 </html>

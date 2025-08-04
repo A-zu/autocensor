@@ -10,9 +10,18 @@ wheels/
 .venv
 
 # Folders
-images
 datasets
+tests
+input
+output
+results
+benchmarks/bench_inputs
+benchmarks/bench_outputs
 
 # resources
 *.pt
 *.zip
+!sample.zip
+*.pdf
+!sample.pdf
+mobileclip_blt.ts

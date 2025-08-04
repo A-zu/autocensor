@@ -5,14 +5,31 @@ description = "Add your description here"
 readme = "README.md"
 requires-python = ">=3.12"
 dependencies = [
-    "easyocr>=1.7.2",
-    "fastapi>=0.115.12",
-    "numpy>=2.2.5",
-    "ollama>=0.4.8",
-    "opencv-python>=4.11.0.86",
-    "pillow>=11.2.1",
-    "pillow-heif>=0.22.0",
-    "python-multipart>=0.0.20",
-    "ultralytics>=8.3.119",
-    "uvicorn>=0.34.2",
+  "clip",
+  "fastapi>=0.115.12",
+  "ffmpeg-python>=0.2.0",
+  "numpy>=2.2.5",
+  "ollama>=0.4.8",
+  "opencv-python-headless>=4.11.0.86",
+  "pillow-heif>=0.22.0",
+  "pymupdf>=1.26.0",
+  "python-multipart>=0.0.20",
+  "torch>=2.7.0",
+  "torchvision>=0.22.0",
+  "ultralytics>=8.3.119",
+  "uvicorn>=0.34.2",
 ]
+
+[tool.uv.sources]
+torch = [
+  { index = "pytorch-cu128", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+torchvision = [
+  { index = "pytorch-cu128", marker = "sys_platform == 'linux' or sys_platform == 'win32'" },
+]
+clip = { git = "https://github.com/ultralytics/CLIP.git" }
+
+[[tool.uv.index]]
+name = "pytorch-cu128"
+url = "https://download.pytorch.org/whl/cu128"
+explicit = true
