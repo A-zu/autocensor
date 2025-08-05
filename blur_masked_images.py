@@ -300,7 +300,7 @@ def process_results_threaded(
                 retina_masks=True,
             )
             results_iter = executor.map(
-                lambda result: blur_result(result, blur_intensity), results
+                lambda result: blur_result(result, blur_intensity, max_fraction=0.25), results
             )
         elif mode == "censor":
             results = model.predict(
